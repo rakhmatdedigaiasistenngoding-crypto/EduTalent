@@ -1,0 +1,1304 @@
+﻿<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Asesmen Minat & Bakat Indonesia</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- html2pdf.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <!-- Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+
+            .print-area {
+                display: block !important;
+                width: 100%;
+            }
+
+            body {
+                background: white;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-slate-50 text-slate-800">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // URL Web App Google Apps Script Anda (GANTI URL INI)
+        const GOOGLE_SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycby_maNKXGi0Nf-myGA4x4L9zslchAK2KAWgj9UJqeHO92PqnCBKMINYyFyD-teh7HKWEw/exec";
+
+        const syncToGoogleSheet = async (action, data) => {
+            try {
+                // Simpan log ke localStorage sebagai backup
+                const logs = JSON.parse(localStorage.getItem('EduTalent_sync_log') || '[]');
+                logs.push({ timestamp: new Date().toISOString(), action, data });
+                localStorage.setItem('EduTalent_sync_log', JSON.stringify(logs));
+
+                // Kirim ke Google Sheet via POST
+                fetch(GOOGLE_SHEET_WEBAPP_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', // Mencegah error CORS di browser
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action, data })
+                }).catch(e => console.log("Gagal sync ke GSheet:", e));
+            } catch (e) {
+                console.log("Error localStorage:", e);
+            }
+        };
+
+        // --- IKON ---
+        const Icon = ({ d, className, size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {d}
+            </svg>
+        );
+
+        const Icons = {
+            Briefcase: (p) => <Icon {...p} d={<><rect width="20" height="14" x="2" y="7" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></>} />,
+            BookOpen: (p) => <Icon {...p} d={<><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></>} />,
+            Camera: (p) => <Icon {...p} d={<><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" /></>} />,
+            Heart: (p) => <Icon {...p} d={<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />} />,
+            ArrowRight: (p) => <Icon {...p} d={<><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></>} />,
+            Calculator: (p) => <Icon {...p} d={<><rect width="16" height="20" x="4" y="2" rx="2" /><line x1="8" x2="16" y1="6" y2="6" /><line x1="16" x2="16" y1="14" y2="18" /><path d="M16 10h.01" /><path d="M12 10h.01" /><path d="M8 10h.01" /><path d="M12 14h.01" /><path d="M8 14h.01" /><path d="M12 18h.01" /><path d="M8 18h.01" /></>} />,
+            PenTool: (p) => <Icon {...p} d={<><path d="m12 19 7-7 3 3-7 7-3-3z" /><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" /><path d="m2 2 7.586 7.586" /><circle cx="11" cy="11" r="2" /></>} />,
+            RefreshCcw: (p) => <Icon {...p} d={<><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" /><path d="M16 21h5v-5" /></>} />,
+            CheckCircle: (p) => <Icon {...p} d={<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><path d="M22 4 12 14.01l-3-3" /></>} />,
+            X: (p) => <Icon {...p} d={<><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></>} />,
+            Check: (p) => <Icon {...p} d={<polyline points="20 6 9 17 4 12" />} />,
+            List: (p) => <Icon {...p} d={<><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></>} />,
+            XCircle: (p) => <Icon {...p} d={<><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></>} />,
+            Info: (p) => <Icon {...p} d={<><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></>} />,
+            Settings: (p) => <Icon {...p} d={<><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.35a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></>} />,
+            Map: (p) => <Icon {...p} d={<><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" /><line x1="9" x2="9" y1="3" y2="18" /><line x1="15" x2="15" y1="6" y2="21" /></>} />,
+            FileText: (p) => <Icon {...p} d={<><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /></>} />,
+            ArrowLeft: (p) => <Icon {...p} d={<><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></>} />,
+            Printer: (p) => <Icon {...p} d={<><polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect width="12" height="8" x="6" y="14" /></>} />,
+            DollarSign: (p) => <Icon {...p} d={<><line x1="12" x2="12" y1="2" y2="22" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></>} />,
+            Brain: (p) => <Icon {...p} d={<path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z" />} />,
+            Lightbulb: (p) => <Icon {...p} d={<><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-1 1.5-2.4 1.5-3.8 0-3.2-2.8-6-6-6S6 4.8 6 8c0 1.4.5 2.8 1.5 3.8.8.8 1.3 1.5 1.5 2.5" /><path d="M9 18h6" /><path d="M10 22h4" /></>} />,
+            TrendingUp: (p) => <Icon {...p} d={<polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />} />,
+            Target: (p) => <Icon {...p} d={<><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></>} />,
+            LayoutGrid: (p) => <Icon {...p} d={<><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /></>} />,
+            Users: (p) => <Icon {...p} d={<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>} />,
+            BarChart2: (p) => <Icon {...p} d={<><line x1="18" x2="18" y1="20" y2="10" /><line x1="12" x2="12" y1="20" y2="4" /><line x1="6" x2="6" y1="20" y2="14" /></>} />,
+            MessageSquare: (p) => <Icon {...p} d={<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />} />,
+            Star: (p) => <Icon {...p} d={<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />} />,
+            Briefcase: (p) => <Icon {...p} d={<><rect width="20" height="14" x="2" y="7" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></>} />,
+        };
+
+        const PROFESSIONS = [
+            // 1. Teknologi, Teknik & Sistem
+            { name: 'Software Engineer', domain: 'Teknologi, Teknik & Sistem', akademik: { sma: 'SMA (MIPA) / SMK (RPL, TKJ)', kuliah: 'S1 Informatika / S1 Sistem Informasi', ukm_coe: 'UKM Pemrograman, CoE Artificial Intelligence' }, trait: [0.9, 0.9, 0.4, 0.6, 0.8], riasec: [0.3, 0.9, 0.5, 0.2, 0.5, 0.8], work_values: [0.8, 0.9, 0.4, 0.9, 0.9, 0.7], environment: [0.9, 0.7, 0.4, 0.3, 0.2, 0.1] },
+            { name: 'Cyber Security Specialist', domain: 'Teknologi, Teknik & Sistem', akademik: { sma: 'SMA (MIPA) / SMK (TKJ, RPL)', kuliah: 'S1 Informatika / S1 Sistem Informasi', ukm_coe: 'UKM Cyber Security, CoE Network & Security' }, trait: [0.8, 0.95, 0.3, 0.5, 0.9], riasec: [0.6, 0.95, 0.2, 0.2, 0.4, 0.9], work_values: [0.9, 0.8, 0.3, 0.7, 0.6, 0.5], environment: [0.95, 0.8, 0.5, 0.8, 0.7, 0.1] },
+            { name: 'Cloud Architect', domain: 'Teknologi, Teknik & Sistem', akademik: { sma: 'SMA (MIPA) / SMK (TKJ)', kuliah: 'S1 Teknologi Informasi / S1 Informatika', ukm_coe: 'UKM Cloud Computing, CoE Infrastructure' }, trait: [0.85, 0.9, 0.5, 0.7, 0.85], riasec: [0.5, 0.9, 0.4, 0.4, 0.7, 0.8], work_values: [0.8, 0.9, 0.5, 0.8, 0.7, 0.6], environment: [0.9, 0.6, 0.4, 0.5, 0.3, 0.1] },
+            { name: 'Data Scientist', domain: 'Teknologi, Teknik & Sistem', akademik: { sma: 'SMA (MIPA)', kuliah: 'S1 Informatika / S1 Sistem Informasi', ukm_coe: 'UKM Data Science, CoE Big Data Analytics' }, trait: [0.9, 0.9, 0.4, 0.6, 0.8], riasec: [0.2, 0.95, 0.3, 0.3, 0.6, 0.9], work_values: [0.7, 0.9, 0.5, 0.8, 0.8, 0.7], environment: [0.8, 0.7, 0.3, 0.4, 0.3, 0.1] },
+            { name: 'IoT & Robotics Engineer', domain: 'Teknologi, Teknik & Sistem', akademik: { sma: 'SMA (MIPA) / SMK (TEI, Mekatronika)', kuliah: 'S1 Teknik Elektro / S1 Teknik Komputer', ukm_coe: 'UKM Robotik, CoE Internet of Things' }, trait: [0.9, 0.9, 0.5, 0.6, 0.8], riasec: [0.8, 0.9, 0.4, 0.3, 0.6, 0.7], work_values: [0.7, 0.85, 0.5, 0.8, 0.9, 0.6], environment: [0.9, 0.5, 0.4, 0.4, 0.4, 0.3] },
+            { name: 'Fullstack Developer', domain: 'Teknologi, Teknik & Sistem', akademik: { sma: 'SMA (MIPA/IPS) / SMK (RPL)', kuliah: 'S1 Informatika', ukm_coe: 'UKM Pemrograman, CoE Software Engineering' }, trait: [0.8, 0.9, 0.6, 0.7, 0.8], riasec: [0.4, 0.8, 0.6, 0.4, 0.6, 0.7], work_values: [0.7, 0.9, 0.5, 0.8, 0.8, 0.7], environment: [0.7, 0.8, 0.5, 0.6, 0.3, 0.1] },
+            { name: 'DevOps Engineer', domain: 'Teknologi, Teknik & Sistem', akademik: { sma: 'SMA (MIPA) / SMK (TKJ)', kuliah: 'S1 Teknologi Informasi', ukm_coe: 'UKM Cloud Computing, CoE Infrastructure' }, trait: [0.7, 0.95, 0.4, 0.6, 0.9], riasec: [0.6, 0.9, 0.3, 0.3, 0.5, 0.95], work_values: [0.9, 0.8, 0.4, 0.7, 0.6, 0.8], environment: [0.8, 0.5, 0.8, 0.7, 0.8, 0.1] },
+            { name: 'Blockchain Developer', domain: 'Teknologi, Teknik & Sistem', akademik: { sma: 'SMA (MIPA)', kuliah: 'S1 Informatika', ukm_coe: 'UKM Pemrograman, CoE Fintech' }, trait: [0.9, 0.9, 0.3, 0.5, 0.9], riasec: [0.2, 0.98, 0.5, 0.2, 0.7, 0.8], work_values: [0.6, 0.9, 0.3, 0.9, 0.9, 0.6], environment: [0.8, 0.6, 0.4, 0.8, 0.5, 0.1] },
+            { name: 'Game Developer', domain: 'Teknologi, Teknik & Sistem', akademik: { sma: 'SMA (MIPA) / SMK (RPL/Multimedia)', kuliah: 'S1 Informatika / S1 Sistem Informasi', ukm_coe: 'UKM Robotik, CoE Game Development' }, trait: [0.95, 0.8, 0.6, 0.7, 0.7], riasec: [0.4, 0.7, 0.95, 0.3, 0.6, 0.5], work_values: [0.5, 0.9, 0.4, 0.95, 0.98, 0.8], environment: [0.6, 0.7, 0.2, 0.8, 0.2, 0.1] },
+            { name: 'Network Architect', domain: 'Teknologi, Teknik & Sistem', akademik: { sma: 'SMA (MIPA) / SMK (TKJ)', kuliah: 'S1 Teknologi Informasi', ukm_coe: 'UKM Cyber Security, CoE Network' }, trait: [0.7, 0.95, 0.5, 0.7, 0.9], riasec: [0.8, 0.85, 0.2, 0.4, 0.6, 0.9], work_values: [0.9, 0.8, 0.5, 0.6, 0.4, 0.7], environment: [0.9, 0.4, 0.9, 0.7, 0.9, 0.2] },
+
+            // 2. Kesehatan & Perawatan
+            { name: 'Dokter Umum', domain: 'Kesehatan & Perawatan', akademik: { sma: 'SMA (MIPA)', kuliah: 'S1 Kedokteran', ukm_coe: 'KSR-PMI / UKM Kesehatan' }, trait: [0.7, 0.95, 0.6, 0.85, 0.95], riasec: [0.6, 0.95, 0.2, 0.85, 0.5, 0.9], work_values: [0.9, 0.95, 0.9, 0.5, 0.4, 0.4], environment: [0.4, 0.8, 0.9, 0.9, 0.8, 0.1] },
+            { name: 'Perawat Medis', domain: 'Kesehatan & Perawatan', akademik: { sma: 'SMA (MIPA) / SMK Kesehatan', kuliah: 'S1 Keperawatan', ukm_coe: 'UKM Kesehatan, KSR-PMI' }, trait: [0.6, 0.9, 0.7, 0.95, 0.9], riasec: [0.5, 0.7, 0.2, 0.95, 0.4, 0.9], work_values: [0.8, 0.85, 0.95, 0.4, 0.3, 0.3], environment: [0.3, 0.95, 0.8, 0.85, 0.7, 0.1] },
+            { name: 'Ahli Gizi (Nutritionist)', domain: 'Kesehatan & Perawatan', akademik: { sma: 'SMA (MIPA)', kuliah: 'S1 Gizi', ukm_coe: 'UKM Kewirausahaan (Produk Sehat)' }, trait: [0.8, 0.9, 0.5, 0.8, 0.85], riasec: [0.4, 0.9, 0.3, 0.8, 0.5, 0.85], work_values: [0.8, 0.85, 0.8, 0.6, 0.7, 0.6], environment: [0.4, 0.6, 0.6, 0.5, 0.4, 0.1] },
+            { name: 'Apoteker', domain: 'Kesehatan & Perawatan', akademik: { sma: 'SMA (MIPA) / SMK Farmasi', kuliah: 'S1 Farmasi', ukm_coe: 'UKM Penelitian' }, trait: [0.7, 0.98, 0.4, 0.8, 0.9], riasec: [0.5, 0.95, 0.2, 0.7, 0.5, 0.98], work_values: [0.95, 0.85, 0.8, 0.5, 0.4, 0.6], environment: [0.5, 0.4, 0.8, 0.6, 0.8, 0.1] },
+            { name: 'Fisioterapis', domain: 'Kesehatan & Perawatan', akademik: { sma: 'SMA (MIPA)', kuliah: 'S1 Fisioterapi / S1 Pend. Olahraga', ukm_coe: 'UKM Olahraga, CoE Sport Science' }, trait: [0.75, 0.9, 0.8, 0.85, 0.85], riasec: [0.85, 0.7, 0.4, 0.9, 0.6, 0.8], work_values: [0.7, 0.8, 0.9, 0.6, 0.5, 0.6], environment: [0.6, 0.9, 0.7, 0.6, 0.3, 0.2] },
+            { name: 'Dokter Spesialis Bedah', domain: 'Kesehatan & Perawatan', akademik: { sma: 'SMA (MIPA)', kuliah: 'Spesialis Bedah', ukm_coe: 'KSR-PMI' }, trait: [0.6, 0.99, 0.4, 0.7, 0.98], riasec: [0.9, 0.95, 0.1, 0.6, 0.5, 0.95], work_values: [0.9, 0.98, 0.8, 0.4, 0.3, 0.2], environment: [0.9, 0.4, 0.98, 0.95, 0.9, 0.1] },
+            { name: 'Psikiater', domain: 'Kesehatan & Perawatan', akademik: { sma: 'SMA (MIPA)', kuliah: 'Spesialis Kedokteran Jiwa / Psikologi', ukm_coe: 'UKM Kesehatan' }, trait: [0.8, 0.95, 0.6, 0.98, 0.9], riasec: [0.1, 0.9, 0.4, 0.99, 0.5, 0.8], work_values: [0.8, 0.85, 0.98, 0.7, 0.6, 0.6], environment: [0.1, 0.95, 0.9, 0.7, 0.8, 0.1] },
+            { name: 'Radiografer', domain: 'Kesehatan & Perawatan', akademik: { sma: 'SMA (MIPA) / SMK Kesehatan', kuliah: 'D3/D4 Radiologi / S1 Teknik Elektro', ukm_coe: 'UKM Robotik' }, trait: [0.6, 0.98, 0.4, 0.7, 0.9], riasec: [0.8, 0.8, 0.2, 0.5, 0.4, 0.98], work_values: [0.95, 0.8, 0.7, 0.4, 0.3, 0.7], environment: [0.9, 0.3, 0.95, 0.6, 0.9, 0.1] },
+            { name: 'Bidan Professional', domain: 'Kesehatan & Perawatan', akademik: { sma: 'SMA (MIPA) / SMK Kesehatan', kuliah: 'S1 Kebidanan', ukm_coe: 'KSR-PMI, UKM Kesehatan' }, trait: [0.6, 0.9, 0.7, 0.95, 0.95], riasec: [0.5, 0.6, 0.2, 0.98, 0.4, 0.9], work_values: [0.85, 0.8, 0.99, 0.4, 0.3, 0.3], environment: [0.3, 0.98, 0.7, 0.8, 0.7, 0.1] },
+            { name: 'Analis Laboratorium Medis', domain: 'Kesehatan & Perawatan', akademik: { sma: 'SMA (MIPA) / SMK Kesehatan', kuliah: 'S1 Teknologi Lab Medis / S1 Kimia', ukm_coe: 'UKM Penelitian' }, trait: [0.6, 0.99, 0.3, 0.7, 0.9], riasec: [0.7, 0.98, 0.2, 0.4, 0.3, 0.99], work_values: [0.98, 0.8, 0.6, 0.4, 0.3, 0.8], environment: [0.8, 0.3, 0.98, 0.5, 0.9, 0.1] },
+
+            // 3. Bisnis, Manajemen & Administrasi
+            { name: 'Digital Marketer', domain: 'Bisnis, Manajemen & Administrasi', akademik: { sma: 'SMA (IPS/MIPA) / SMK (Pemasaran)', kuliah: 'S1 Manajemen / S1 Komunikasi', ukm_coe: 'UKM Entrepreneur, CoE Business Innovation' }, trait: [0.95, 0.85, 0.9, 0.7, 0.75], riasec: [0.2, 0.6, 0.85, 0.6, 0.95, 0.7], work_values: [0.5, 0.9, 0.4, 0.8, 0.95, 0.7], environment: [0.3, 0.8, 0.4, 0.7, 0.2, 0.1] },
+            { name: 'HR Specialist', domain: 'Bisnis, Manajemen & Administrasi', akademik: { sma: 'SMA (IPS/MIPA)', kuliah: 'S1 Psikologi / S1 Manajemen', ukm_coe: 'Duta Teknokrat, UKM English Club' }, trait: [0.85, 0.9, 0.8, 0.9, 0.85], riasec: [0.2, 0.7, 0.4, 0.95, 0.8, 0.85], work_values: [0.8, 0.85, 0.85, 0.6, 0.5, 0.6], environment: [0.2, 0.95, 0.7, 0.6, 0.7, 0.1] },
+            { name: 'Akuntan & Auditor', domain: 'Bisnis, Manajemen & Administrasi', akademik: { sma: 'SMA (IPS/MIPA) / SMK (Akuntansi)', kuliah: 'S1 Akuntansi', ukm_coe: 'UKM Akuntansi, CoE Professional Accounting' }, trait: [0.6, 0.98, 0.4, 0.75, 0.9], riasec: [0.2, 0.7, 0.2, 0.4, 0.6, 0.98], work_values: [0.98, 0.85, 0.6, 0.4, 0.3, 0.7], environment: [0.2, 0.4, 0.95, 0.8, 0.9, 0.1] },
+            { name: 'Product Manager', domain: 'Bisnis, Manajemen & Administrasi', akademik: { sma: 'SMA (Bebas) / SMK (RPL/Pemasaran)', kuliah: 'S1 Sistem Informasi / S1 Manajemen', ukm_coe: 'UKM Programming, CoE Business Innovation' }, trait: [0.9, 0.9, 0.85, 0.8, 0.8], riasec: [0.3, 0.85, 0.6, 0.7, 0.9, 0.8], work_values: [0.6, 0.95, 0.5, 0.9, 0.85, 0.6], environment: [0.5, 0.9, 0.3, 0.8, 0.5, 0.1] },
+            { name: 'Financial Analyst', domain: 'Bisnis, Manajemen & Administrasi', akademik: { sma: 'SMA (IPS/MIPA)', kuliah: 'S1 Akuntansi / S1 Manajemen', ukm_coe: 'UKM Entrepreneur' }, trait: [0.8, 0.95, 0.5, 0.7, 0.85], riasec: [0.2, 0.95, 0.3, 0.4, 0.8, 0.95], work_values: [0.8, 0.95, 0.4, 0.7, 0.6, 0.6], environment: [0.3, 0.6, 0.8, 0.8, 0.8, 0.1] },
+            { name: 'Business Development', domain: 'Bisnis, Manajemen & Administrasi', akademik: { sma: 'SMA (IPS/MIPA)', kuliah: 'S1 Manajemen / S1 Sistem Informasi', ukm_coe: 'UKM Entrepreneur, Duta Teknokrat' }, trait: [0.9, 0.8, 0.95, 0.7, 0.8], riasec: [0.3, 0.5, 0.4, 0.7, 0.98, 0.6], work_values: [0.5, 0.95, 0.4, 0.8, 0.9, 0.5], environment: [0.3, 0.9, 0.2, 0.8, 0.4, 0.1] },
+            { name: 'Investment Banker', domain: 'Bisnis, Manajemen & Administrasi', akademik: { sma: 'SMA (MIPA/IPS)', kuliah: 'S1 Akuntansi / S1 Manajemen', ukm_coe: 'UKM Akuntansi' }, trait: [0.8, 0.98, 0.7, 0.5, 0.95], riasec: [0.2, 0.9, 0.3, 0.4, 0.95, 0.9], work_values: [0.6, 0.99, 0.3, 0.6, 0.5, 0.2], environment: [0.3, 0.7, 0.6, 0.98, 0.9, 0.1] },
+            { name: 'Supply Chain Manager', domain: 'Bisnis, Manajemen & Administrasi', akademik: { sma: 'SMA (IPS/MIPA) / SMK (Logistik)', kuliah: 'S1 Manajemen / S1 Teknik Industri', ukm_coe: 'UKM Entrepreneur' }, trait: [0.7, 0.95, 0.6, 0.8, 0.85], riasec: [0.6, 0.8, 0.2, 0.5, 0.8, 0.95], work_values: [0.9, 0.9, 0.6, 0.6, 0.5, 0.6], environment: [0.6, 0.7, 0.9, 0.8, 0.8, 0.2] },
+            { name: 'Market Researcher', domain: 'Bisnis, Manajemen & Administrasi', akademik: { sma: 'SMA (IPS/MIPA)', kuliah: 'S1 Komunikasi / S1 Psikologi', ukm_coe: 'UKM Penelitian, CoE Big Data' }, trait: [0.9, 0.95, 0.5, 0.8, 0.85], riasec: [0.2, 0.98, 0.4, 0.6, 0.7, 0.9], work_values: [0.7, 0.9, 0.6, 0.8, 0.7, 0.7], environment: [0.4, 0.6, 0.8, 0.6, 0.7, 0.1] },
+            { name: 'Corporate Secretary', domain: 'Bisnis, Manajemen & Administrasi', akademik: { sma: 'SMA (IPS/MIPA) / SMK (Perkantoran)', kuliah: 'S1 Hukum / S1 Manajemen', ukm_coe: 'Duta Teknokrat, UKM English Club' }, trait: [0.6, 0.99, 0.7, 0.9, 0.9], riasec: [0.2, 0.6, 0.4, 0.8, 0.7, 0.99], work_values: [0.95, 0.8, 0.7, 0.5, 0.3, 0.7], environment: [0.2, 0.8, 0.95, 0.6, 0.9, 0.1] },
+
+            // 4. ASN, Kedinasan & Layanan Publik
+            { name: 'Diplomat / Atase Luar Negeri', domain: 'ASN, Kedinasan & Layanan Publik', akademik: { sma: 'SMA (Bahasa/IPS/MIPA)', kuliah: 'S1 Sastra Inggris / S1 Hubungan Internasional', ukm_coe: 'UKM English Club, Duta Teknokrat' }, trait: [0.9, 0.9, 0.95, 0.9, 0.9], riasec: [0.2, 0.8, 0.6, 0.9, 0.9, 0.8], work_values: [0.8, 0.9, 0.8, 0.6, 0.5, 0.5], environment: [0.2, 0.95, 0.6, 0.7, 0.95, 0.1] },
+            { name: 'Analis Kebijakan Publik', domain: 'ASN, Kedinasan & Layanan Publik', akademik: { sma: 'SMA (IPS/MIPA)', kuliah: 'S1 Hukum / S1 Ilmu Politik', ukm_coe: 'UKM English Club, Resimen Mahasiswa' }, trait: [0.85, 0.95, 0.6, 0.8, 0.85], riasec: [0.2, 0.9, 0.4, 0.7, 0.8, 0.9], work_values: [0.9, 0.85, 0.9, 0.6, 0.5, 0.6], environment: [0.3, 0.7, 0.8, 0.7, 0.9, 0.1] },
+            { name: 'Pranata Komputer (ASN)', domain: 'ASN, Kedinasan & Layanan Publik', akademik: { sma: 'SMA (MIPA) / SMK (RPL/TKJ)', kuliah: 'S1 Informatika / S1 Sistem Informasi', ukm_coe: 'UKM Programming, CoE Digital Governance' }, trait: [0.75, 0.95, 0.4, 0.75, 0.9], riasec: [0.5, 0.9, 0.3, 0.5, 0.6, 0.95], work_values: [0.98, 0.8, 0.7, 0.5, 0.5, 0.8], environment: [0.8, 0.5, 0.9, 0.5, 0.9, 0.1] },
+            { name: 'Peneliti (Researcher)', domain: 'ASN, Kedinasan & Layanan Publik', akademik: { sma: 'SMA (MIPA)', kuliah: 'S1 Informatika / S1 Sastra Inggris', ukm_coe: 'UKM Penelitian, CoE AI & Big Data' }, trait: [0.98, 0.95, 0.3, 0.6, 0.85], riasec: [0.3, 0.98, 0.5, 0.4, 0.5, 0.9], work_values: [0.7, 0.9, 0.7, 0.9, 0.8, 0.7], environment: [0.6, 0.4, 0.7, 0.6, 0.8, 0.1] },
+            { name: 'Penyidik / Intelijen', domain: 'ASN, Kedinasan & Layanan Publik', akademik: { sma: 'SMA (MIPA/IPS)', kuliah: 'S1 Hukum / S1 Informatika (Digital Forensics)', ukm_coe: 'UKM Resimen Mahasiswa, UKM Taekwondo' }, trait: [0.8, 0.98, 0.5, 0.6, 0.95], riasec: [0.7, 0.95, 0.3, 0.4, 0.7, 0.9], work_values: [0.9, 0.85, 0.8, 0.7, 0.6, 0.4], environment: [0.7, 0.6, 0.5, 0.9, 0.8, 0.4] },
+            { name: 'Petugas Bea Cukai', domain: 'ASN, Kedinasan & Layanan Publik', akademik: { sma: 'SMA (MIPA/IPS)', kuliah: 'S1 Akuntansi / S1 Hukum', ukm_coe: 'UKM Resimen Mahasiswa' }, trait: [0.6, 0.98, 0.6, 0.7, 0.95], riasec: [0.8, 0.6, 0.2, 0.5, 0.6, 0.98], work_values: [0.95, 0.8, 0.8, 0.4, 0.3, 0.6], environment: [0.7, 0.5, 0.98, 0.8, 0.9, 0.4] },
+            { name: 'Statistisi (BPS)', domain: 'ASN, Kedinasan & Layanan Publik', akademik: { sma: 'SMA (MIPA)', kuliah: 'S1 Informatika / S1 Akuntansi', ukm_coe: 'CoE Big Data Analytics' }, trait: [0.7, 0.99, 0.3, 0.7, 0.9], riasec: [0.2, 0.98, 0.2, 0.4, 0.5, 0.99], work_values: [0.98, 0.85, 0.6, 0.6, 0.4, 0.8], environment: [0.4, 0.4, 0.95, 0.6, 0.9, 0.1] },
+            { name: 'Arsiparis', domain: 'ASN, Kedinasan & Layanan Publik', akademik: { sma: 'SMA (IPS/MIPA) / SMK (Perkantoran)', kuliah: 'S1 Sistem Informasi', ukm_coe: 'UKM Akuntansi' }, trait: [0.5, 0.99, 0.4, 0.8, 0.9], riasec: [0.3, 0.6, 0.2, 0.5, 0.4, 0.99], work_values: [0.98, 0.7, 0.6, 0.5, 0.3, 0.9], environment: [0.2, 0.4, 0.99, 0.5, 0.9, 0.1] },
+            { name: 'Penyuluh Sosial', domain: 'ASN, Kedinasan & Layanan Publik', akademik: { sma: 'SMA (IPS/Bahasa)', kuliah: 'S1 Psikologi / S1 Komunikasi', ukm_coe: 'Duta Teknokrat, UKM English Club' }, trait: [0.8, 0.9, 0.85, 0.98, 0.9], riasec: [0.2, 0.6, 0.4, 0.99, 0.7, 0.8], work_values: [0.8, 0.75, 0.98, 0.6, 0.5, 0.6], environment: [0.2, 0.95, 0.6, 0.6, 0.7, 0.8] },
+            { name: 'Petugas Imigrasi', domain: 'ASN, Kedinasan & Layanan Publik', akademik: { sma: 'SMA (IPS/Bahasa/MIPA)', kuliah: 'S1 Sastra Inggris / S1 Hukum', ukm_coe: 'UKM English Club, Resimen Mahasiswa' }, trait: [0.65, 0.98, 0.7, 0.8, 0.95], riasec: [0.5, 0.7, 0.3, 0.8, 0.7, 0.98], work_values: [0.95, 0.85, 0.7, 0.5, 0.4, 0.6], environment: [0.4, 0.85, 0.95, 0.7, 0.9, 0.2] },
+
+            // 5. Seni, Desain & Industri Kreatif
+            { name: 'UI/UX Designer', domain: 'Seni, Desain & Industri Kreatif', akademik: { sma: 'SMA (Bebas) / SMK (DKV/RPL)', kuliah: 'S1 Sistem Informasi / S1 DKV', ukm_coe: 'UKM Animedia, CoE Metaverse' }, trait: [0.95, 0.9, 0.6, 0.8, 0.8], riasec: [0.2, 0.85, 0.95, 0.5, 0.7, 0.8], work_values: [0.6, 0.9, 0.5, 0.9, 0.98, 0.8], environment: [0.4, 0.7, 0.5, 0.7, 0.3, 0.1] },
+            { name: 'Animator & 3D Artist', domain: 'Seni, Desain & Industri Kreatif', akademik: { sma: 'SMA (Bebas) / SMK (Multimedia/Animasi)', kuliah: 'S1 DKV / S1 Sistem Informasi', ukm_coe: 'UKM Animedia, CoE Game Development' }, trait: [0.98, 0.85, 0.5, 0.75, 0.7], riasec: [0.5, 0.6, 0.98, 0.3, 0.5, 0.7], work_values: [0.5, 0.85, 0.4, 0.9, 0.98, 0.8], environment: [0.7, 0.5, 0.6, 0.7, 0.3, 0.1] },
+            { name: 'Content Creator / Influencer', domain: 'Seni, Desain & Industri Kreatif', akademik: { sma: 'SMA (Bebas) / SMK (Broadcasting)', kuliah: 'S1 Komunikasi / S1 Sastra Inggris', ukm_coe: 'Duta Teknokrat, UKM Musik / Band' }, trait: [0.9, 0.7, 0.98, 0.8, 0.6], riasec: [0.1, 0.3, 0.95, 0.7, 0.95, 0.4], work_values: [0.3, 0.9, 0.6, 0.98, 0.98, 0.7], environment: [0.2, 0.7, 0.2, 0.8, 0.2, 0.4] },
+            { name: 'Copywriter / Scriptwriter', domain: 'Seni, Desain & Industri Kreatif', akademik: { sma: 'SMA (Bahasa/IPS)', kuliah: 'S1 Sastra Inggris / S1 Komunikasi', ukm_coe: 'UKM English Club, UKM Film' }, trait: [0.98, 0.85, 0.6, 0.85, 0.75], riasec: [0.1, 0.5, 0.95, 0.6, 0.7, 0.6], work_values: [0.6, 0.8, 0.5, 0.95, 0.95, 0.8], environment: [0.2, 0.6, 0.5, 0.6, 0.4, 0.1] },
+            { name: 'Fashion Designer', domain: 'Seni, Desain & Industri Kreatif', akademik: { sma: 'SMA (Bebas) / SMK (Tata Busana)', kuliah: 'S1 Desain Mode / S1 DKV', ukm_coe: 'UKM Tari / Duta Teknokrat' }, trait: [0.98, 0.8, 0.7, 0.7, 0.6], riasec: [0.6, 0.4, 0.98, 0.4, 0.8, 0.7], work_values: [0.4, 0.9, 0.4, 0.95, 0.98, 0.6], environment: [0.7, 0.6, 0.3, 0.8, 0.4, 0.1] },
+            { name: 'Creative Director', domain: 'Seni, Desain & Industri Kreatif', akademik: { sma: 'SMA (Bebas)', kuliah: 'S1 Komunikasi / S1 DKV', ukm_coe: 'UKM Animedia, Duta Teknokrat' }, trait: [0.95, 0.85, 0.9, 0.7, 0.8], riasec: [0.2, 0.6, 0.95, 0.6, 0.95, 0.6], work_values: [0.4, 0.98, 0.5, 0.9, 0.98, 0.5], environment: [0.3, 0.9, 0.4, 0.85, 0.3, 0.1] },
+            { name: 'Video Editor Professional', domain: 'Seni, Desain & Industri Kreatif', akademik: { sma: 'SMA (Bebas) / SMK (Multimedia)', kuliah: 'S1 Sistem Informasi / S1 Komunikasi', ukm_coe: 'UKM Film, CoE Metaverse' }, trait: [0.95, 0.9, 0.4, 0.7, 0.85], riasec: [0.5, 0.6, 0.98, 0.3, 0.5, 0.8], work_values: [0.7, 0.85, 0.4, 0.8, 0.95, 0.8], environment: [0.7, 0.4, 0.6, 0.8, 0.4, 0.1] },
+            { name: 'Photographer / Videographer', domain: 'Seni, Desain & Industri Kreatif', akademik: { sma: 'SMA (Bebas)', kuliah: 'S1 Komunikasi / S1 DKV', ukm_coe: 'UKM Film, UKM Animedia' }, trait: [0.95, 0.8, 0.8, 0.8, 0.7], riasec: [0.7, 0.5, 0.99, 0.6, 0.7, 0.5], work_values: [0.4, 0.8, 0.6, 0.98, 0.98, 0.6], environment: [0.6, 0.8, 0.2, 0.7, 0.3, 0.9] },
+            { name: 'Interior Designer', domain: 'Seni, Desain & Industri Kreatif', akademik: { sma: 'SMA (MIPA) / SMK (Gambar Bangunan)', kuliah: 'S1 DKV / S1 Teknik Sipil', ukm_coe: 'UKM Animedia' }, trait: [0.98, 0.95, 0.6, 0.8, 0.85], riasec: [0.7, 0.7, 0.98, 0.5, 0.6, 0.9], work_values: [0.6, 0.9, 0.5, 0.8, 0.98, 0.7], environment: [0.6, 0.7, 0.5, 0.7, 0.4, 0.1] },
+            { name: 'Illustrator / Digital Artist', domain: 'Seni, Desain & Industri Kreatif', akademik: { sma: 'SMA (Bebas) / SMK (Multimedia)', kuliah: 'S1 DKV', ukm_coe: 'UKM Animedia, CoE Metaverse' }, trait: [0.99, 0.8, 0.3, 0.7, 0.7], riasec: [0.3, 0.5, 0.99, 0.3, 0.4, 0.8], work_values: [0.4, 0.8, 0.3, 0.99, 0.99, 0.9], environment: [0.2, 0.2, 0.4, 0.6, 0.3, 0.1] },
+
+            // 6. Pendidikan & Pengembangan Manusia
+            { name: 'Dosen / Peneliti Akademik', domain: 'Pendidikan & Pengembangan Manusia', akademik: { sma: 'SMA (MIPA/IPS)', kuliah: 'S1 & S2 Sesuai Bidang', ukm_coe: 'UKM Penelitian, CoE Education Technology' }, trait: [0.95, 0.95, 0.7, 0.85, 0.9], riasec: [0.2, 0.98, 0.6, 0.9, 0.7, 0.85], work_values: [0.8, 0.9, 0.9, 0.8, 0.8, 0.7], environment: [0.3, 0.8, 0.7, 0.7, 0.9, 0.1] },
+            { name: 'Guru Pendidikan Jasmani', domain: 'Pendidikan & Pengembangan Manusia', akademik: { sma: 'SMA (Bebas)', kuliah: 'S1 Pendidikan Olahraga', ukm_coe: 'UKM Taekwondo, UKM Futsal, CoE Sport Science' }, trait: [0.7, 0.9, 0.9, 0.85, 0.9], riasec: [0.95, 0.4, 0.5, 0.95, 0.8, 0.7], work_values: [0.8, 0.85, 0.9, 0.6, 0.5, 0.6], environment: [0.8, 0.95, 0.4, 0.6, 0.4, 0.9] },
+            { name: 'Instrukur Pelatihan / Trainer', domain: 'Pendidikan & Pengembangan Manusia', akademik: { sma: 'SMA / SMK (Bebas)', kuliah: 'S1 Komunikasi / S1 Psikologi', ukm_coe: 'UKM English Club, Duta Teknokrat' }, trait: [0.85, 0.9, 0.98, 0.9, 0.85], riasec: [0.4, 0.6, 0.7, 0.95, 0.9, 0.7], work_values: [0.6, 0.9, 0.9, 0.8, 0.7, 0.6], environment: [0.4, 0.98, 0.3, 0.7, 0.6, 0.2] },
+            { name: 'Psikolog Pendidikan / Konselor', domain: 'Pendidikan & Pengembangan Manusia', akademik: { sma: 'SMA (IPS/MIPA)', kuliah: 'S1 Psikologi', ukm_coe: 'UKM Islam AR-Rahman (Konseling)' }, trait: [0.85, 0.9, 0.7, 0.98, 0.9], riasec: [0.1, 0.85, 0.5, 0.98, 0.6, 0.8], work_values: [0.8, 0.8, 0.98, 0.7, 0.6, 0.7], environment: [0.2, 0.95, 0.8, 0.6, 0.8, 0.1] },
+            { name: 'Instructional Designer (EdTech)', domain: 'Pendidikan & Pengembangan Manusia', akademik: { sma: 'SMA (MIPA) / SMK (RPL)', kuliah: 'S1 Pendidikan Teknologi Informasi / S1 SI', ukm_coe: 'UKM Programming, CoE EdTech' }, trait: [0.98, 0.95, 0.5, 0.8, 0.85], riasec: [0.3, 0.9, 0.8, 0.7, 0.7, 0.9], work_values: [0.7, 0.9, 0.8, 0.9, 0.95, 0.8], environment: [0.7, 0.7, 0.5, 0.6, 0.4, 0.1] },
+            { name: 'Kepala Sekolah / Manajer Pendidikan', domain: 'Pendidikan & Pengembangan Manusia', akademik: { sma: 'SMA / SMK (Bebas)', kuliah: 'S1 Manajemen / S1 Pendidikan', ukm_coe: 'Duta Teknokrat, UKM English Club' }, trait: [0.8, 0.98, 0.85, 0.9, 0.9], riasec: [0.2, 0.7, 0.4, 0.9, 0.98, 0.95], work_values: [0.9, 0.95, 0.9, 0.6, 0.5, 0.5], environment: [0.2, 0.98, 0.7, 0.7, 0.9, 0.1] },
+            { name: 'Guru Bahasa Inggris Professional', domain: 'Pendidikan & Pengembangan Manusia', akademik: { sma: 'SMA (Bahasa/IPS)', kuliah: 'S1 Sastra Inggris / S1 Pend. Bahasa Inggris', ukm_coe: 'UKM English Club, Duta Teknokrat' }, trait: [0.9, 0.95, 0.95, 0.95, 0.9], riasec: [0.2, 0.7, 0.8, 0.98, 0.85, 0.85], work_values: [0.8, 0.85, 0.98, 0.7, 0.6, 0.6], environment: [0.2, 0.99, 0.5, 0.5, 0.7, 0.1] },
+            { name: 'Analis Kurikulum', domain: 'Pendidikan & Pengembangan Manusia', akademik: { sma: 'SMA (MIPA/IPS)', kuliah: 'S1 & S2 Pendidikan / Sistem Informasi', ukm_coe: 'UKM Penelitian, CoE EdTech' }, trait: [0.8, 0.99, 0.4, 0.8, 0.9], riasec: [0.2, 0.95, 0.3, 0.7, 0.6, 0.99], work_values: [0.95, 0.85, 0.8, 0.8, 0.7, 0.7], environment: [0.3, 0.5, 0.98, 0.7, 0.9, 0.1] },
+            { name: 'Special Education Teacher', domain: 'Pendidikan & Pengembangan Manusia', akademik: { sma: 'SMA (IPS/MIPA)', kuliah: 'S1 Pendidikan Luar Biasa / Psikologi', ukm_coe: 'UKM Kesehatan, KSR-PMI' }, trait: [0.8, 0.9, 0.6, 0.99, 0.95], riasec: [0.3, 0.7, 0.5, 0.99, 0.5, 0.9], work_values: [0.8, 0.7, 0.99, 0.4, 0.3, 0.3], environment: [0.2, 0.99, 0.8, 0.8, 0.7, 0.1] },
+            { name: 'Librarian / Manajer Informasi', domain: 'Pendidikan & Pengembangan Manusia', akademik: { sma: 'SMA (IPS/MIPA) / SMK (Perkantoran)', kuliah: 'S1 Sistem Informasi', ukm_coe: 'UKM Akuntansi, UKM English Club' }, trait: [0.6, 0.99, 0.3, 0.9, 0.9], riasec: [0.3, 0.8, 0.2, 0.8, 0.5, 0.99], work_values: [0.99, 0.7, 0.7, 0.5, 0.3, 0.9], environment: [0.1, 0.3, 0.99, 0.5, 0.9, 0.1] },
+
+            // 7. Pertanian & Sumber Daya Alam
+            { name: 'Ahli Agronomi (Smart Farming)', domain: 'Pertanian & Sumber Daya Alam', akademik: { sma: 'SMA (MIPA) / SMK Pertanian', kuliah: 'S1 Agribisnis / S1 Informatika', ukm_coe: 'CoE Internet of Things' }, trait: [0.9, 0.95, 0.5, 0.7, 0.9], riasec: [0.95, 0.9, 0.3, 0.5, 0.7, 0.8], work_values: [0.8, 0.9, 0.7, 0.8, 0.9, 0.6], environment: [0.9, 0.6, 0.6, 0.7, 0.4, 0.9] },
+            { name: 'Peneliti Kelautan / Marine Biologist', domain: 'Pertanian & Sumber Daya Alam', akademik: { sma: 'SMA (MIPA)', kuliah: 'S1 Ilmu Kelautan / S1 Biologi', ukm_coe: 'UKM Selam / UKM Penelitian' }, trait: [0.98, 0.9, 0.4, 0.7, 0.85], riasec: [0.8, 0.98, 0.5, 0.4, 0.4, 0.8], work_values: [0.6, 0.9, 0.8, 0.9, 0.8, 0.5], environment: [0.7, 0.4, 0.5, 0.7, 0.6, 0.98] },
+            { name: 'Insinyur Kehutanan / Forester', domain: 'Pertanian & Sumber Daya Alam', akademik: { sma: 'SMA (MIPA) / SMK Kehutanan', kuliah: 'S1 Kehutanan', ukm_coe: 'UKM Pecinta Alam' }, trait: [0.8, 0.9, 0.4, 0.8, 0.9], riasec: [0.98, 0.8, 0.3, 0.5, 0.5, 0.8], work_values: [0.8, 0.8, 0.9, 0.7, 0.6, 0.6], environment: [0.9, 0.5, 0.7, 0.6, 0.7, 0.98] },
+            { name: 'Landscape Architect', domain: 'Pertanian & Sumber Daya Alam', akademik: { sma: 'SMA (MIPA) / SMK Gambar Bangunan', kuliah: 'S1 Arsitektur Lanskap / S1 Sipil', ukm_coe: 'UKM Animedia' }, trait: [0.98, 0.85, 0.6, 0.75, 0.8], riasec: [0.7, 0.6, 0.95, 0.5, 0.6, 0.8], work_values: [0.6, 0.85, 0.6, 0.9, 0.95, 0.7], environment: [0.6, 0.6, 0.6, 0.6, 0.4, 0.8] },
+            { name: 'Pengelola Agrowisata', domain: 'Pertanian & Sumber Daya Alam', akademik: { sma: 'SMA / SMK (Pertanian/Pariwisata)', kuliah: 'S1 Agribisnis / S1 Manajemen', ukm_coe: 'UKM Entrepreneur' }, trait: [0.85, 0.85, 0.9, 0.9, 0.85], riasec: [0.8, 0.4, 0.6, 0.85, 0.95, 0.7], work_values: [0.7, 0.9, 0.8, 0.8, 0.9, 0.6], environment: [0.4, 0.95, 0.3, 0.8, 0.5, 0.9] },
+            { name: 'Ahli Hidrologi', domain: 'Pertanian & Sumber Daya Alam', akademik: { sma: 'SMA (MIPA)', kuliah: 'S1 Teknik Sipil / S1 Geografi', ukm_coe: 'UKM Penelitian' }, trait: [0.8, 0.98, 0.4, 0.75, 0.9], riasec: [0.8, 0.98, 0.2, 0.4, 0.5, 0.9], work_values: [0.9, 0.85, 0.8, 0.8, 0.7, 0.6], environment: [0.8, 0.4, 0.8, 0.7, 0.8, 0.9] },
+            { name: 'Konsultan Lingkungan', domain: 'Pertanian & Sumber Daya Alam', akademik: { sma: 'SMA (MIPA/IPS)', kuliah: 'S1 Teknik Sipil / S1 Hubungan Internasional', ukm_coe: 'UKM English Club, UKM Pecinta Alam' }, trait: [0.9, 0.95, 0.6, 0.85, 0.9], riasec: [0.4, 0.9, 0.5, 0.7, 0.8, 0.9], work_values: [0.7, 0.9, 0.9, 0.8, 0.8, 0.7], environment: [0.5, 0.7, 0.7, 0.7, 0.8, 0.6] },
+            { name: 'Pengusaha Produk Organik', domain: 'Pertanian & Sumber Daya Alam', akademik: { sma: 'SMA / SMK (Pertanian)', kuliah: 'S1 Agribisnis / S1 Manajemen', ukm_coe: 'UKM Entrepreneur, CoE Business Innovation' }, trait: [0.95, 0.85, 0.9, 0.8, 0.8], riasec: [0.7, 0.5, 0.6, 0.6, 0.98, 0.7], work_values: [0.5, 0.95, 0.7, 0.9, 0.95, 0.6], environment: [0.6, 0.9, 0.4, 0.8, 0.5, 0.7] },
+            { name: 'Ahli Pemetaan (GIS Specialist)', domain: 'Pertanian & Sumber Daya Alam', akademik: { sma: 'SMA (MIPA/IPS)', kuliah: 'S1 Informatika / S1 Teknik Sipil', ukm_coe: 'UKM Robotik, CoE Big Data' }, trait: [0.8, 0.98, 0.4, 0.7, 0.9], riasec: [0.6, 0.98, 0.5, 0.3, 0.6, 0.98], work_values: [0.9, 0.9, 0.6, 0.8, 0.8, 0.7], environment: [0.8, 0.5, 0.9, 0.7, 0.8, 0.3] },
+            { name: 'Peternak Modern (Livestock Tech)', domain: 'Pertanian & Sumber Daya Alam', akademik: { sma: 'SMA (MIPA) / SMK Pertanian', kuliah: 'S1 Peternakan / S1 Sistem Informasi', ukm_coe: 'CoE Internet of Things' }, trait: [0.7, 0.95, 0.5, 0.8, 0.9], riasec: [0.98, 0.8, 0.2, 0.5, 0.7, 0.9], work_values: [0.8, 0.85, 0.7, 0.7, 0.8, 0.5], environment: [0.98, 0.5, 0.7, 0.7, 0.4, 0.98] },
+
+            // 8. Transportasi & Mobilitas
+            { name: 'Pilot Pesawat Komersial', domain: 'Transportasi & Mobilitas', akademik: { sma: 'SMA (MIPA)', kuliah: 'Sekolah Penerbangan', ukm_coe: 'UKM Resimen Mahasiswa' }, trait: [0.7, 0.99, 0.6, 0.8, 0.98], riasec: [0.95, 0.8, 0.2, 0.6, 0.8, 0.98], work_values: [0.9, 0.95, 0.6, 0.4, 0.3, 0.3], environment: [0.98, 0.4, 0.98, 0.98, 0.95, 0.1] },
+            { name: 'Ahli Logistik & Supply Chain', domain: 'Transportasi & Mobilitas', akademik: { sma: 'SMA (IPS/MIPA) / SMK (Logistik)', kuliah: 'S1 Logistik / S1 Manajemen', ukm_coe: 'UKM Entrepreneur' }, trait: [0.75, 0.98, 0.6, 0.8, 0.9], riasec: [0.6, 0.8, 0.2, 0.5, 0.8, 0.98], work_values: [0.95, 0.9, 0.6, 0.6, 0.5, 0.6], environment: [0.7, 0.6, 0.95, 0.8, 0.8, 0.3] },
+            { name: 'Insinyur Perkeretaapian', domain: 'Transportasi & Mobilitas', akademik: { sma: 'SMA (MIPA) / SMK (Mesin/Elektro)', kuliah: 'S1 Teknik Sipil / S1 Teknik Elektro', ukm_coe: 'UKM Robotik' }, trait: [0.7, 0.98, 0.4, 0.75, 0.95], riasec: [0.98, 0.9, 0.2, 0.4, 0.6, 0.95], work_values: [0.98, 0.8, 0.7, 0.5, 0.4, 0.6], environment: [0.98, 0.5, 0.95, 0.8, 0.9, 0.5] },
+            { name: 'Traffic Management Specialist', domain: 'Transportasi & Mobilitas', akademik: { sma: 'SMA (MIPA/IPS)', kuliah: 'S1 Teknik Sipil (Transportasi) / S1 SI', ukm_coe: 'CoE Big Data Analytics' }, trait: [0.8, 0.95, 0.5, 0.8, 0.9], riasec: [0.4, 0.9, 0.3, 0.6, 0.7, 0.95], work_values: [0.9, 0.85, 0.7, 0.7, 0.6, 0.6], environment: [0.6, 0.7, 0.9, 0.7, 0.8, 0.1] },
+            { name: 'Teknisi Pesawat (Aircraft Tech)', domain: 'Transportasi & Mobilitas', akademik: { sma: 'SMA (MIPA) / SMK (Penerbangan/Mesin)', kuliah: 'D3/D4 Teknik Pesawat', ukm_coe: 'UKM Robotik' }, trait: [0.6, 0.99, 0.4, 0.7, 0.95], riasec: [0.99, 0.85, 0.2, 0.3, 0.5, 0.98], work_values: [0.98, 0.8, 0.5, 0.4, 0.3, 0.5], environment: [0.99, 0.4, 0.98, 0.9, 0.9, 0.6] },
+            { name: 'Nahkoda / Kapal Laut', domain: 'Transportasi & Mobilitas', akademik: { sma: 'SMA (MIPA) / SMK (Pelayaran)', kuliah: 'Sekolah Tinggi Ilmu Pelayaran', ukm_coe: 'UKM Resimen Mahasiswa' }, trait: [0.7, 0.99, 0.7, 0.8, 0.98], riasec: [0.98, 0.7, 0.3, 0.6, 0.85, 0.95], work_values: [0.85, 0.9, 0.6, 0.7, 0.4, 0.3], environment: [0.98, 0.5, 0.7, 0.9, 0.8, 0.98] },
+            { name: 'Warehouse Manager', domain: 'Transportasi & Mobilitas', akademik: { sma: 'SMA / SMK (Logistik/Akuntansi)', kuliah: 'S1 Manajemen / S1 Akuntansi', ukm_coe: 'UKM Akuntansi, UKM Entrepreneur' }, trait: [0.65, 0.98, 0.6, 0.75, 0.9], riasec: [0.7, 0.5, 0.2, 0.4, 0.8, 0.99], work_values: [0.98, 0.85, 0.6, 0.5, 0.3, 0.7], environment: [0.8, 0.6, 0.95, 0.7, 0.9, 0.3] },
+            { name: 'Transport Planner', domain: 'Transportasi & Mobilitas', akademik: { sma: 'SMA (MIPA/IPS)', kuliah: 'S1 Teknik Sipil / S1 Hubungan Internasional', ukm_coe: 'UKM English Club, UKM Penelitian' }, trait: [0.85, 0.95, 0.6, 0.8, 0.85], riasec: [0.3, 0.9, 0.4, 0.7, 0.8, 0.95], work_values: [0.85, 0.9, 0.8, 0.8, 0.7, 0.6], environment: [0.4, 0.8, 0.9, 0.7, 0.9, 0.1] },
+            { name: 'Flight Dispatcher', domain: 'Transportasi & Mobilitas', akademik: { sma: 'SMA (MIPA)', kuliah: 'D3/D4 Transportasi Udara / S1 SI', ukm_coe: 'UKM English Club' }, trait: [0.6, 0.99, 0.5, 0.75, 0.98], riasec: [0.5, 0.8, 0.2, 0.4, 0.7, 0.99], work_values: [0.98, 0.85, 0.5, 0.4, 0.3, 0.6], environment: [0.6, 0.4, 0.99, 0.9, 0.9, 0.1] },
+            { name: 'Manajer Armada (Fleet Manager)', domain: 'Transportasi & Mobilitas', akademik: { sma: 'SMA / SMK (Otomotif/Logistik)', kuliah: 'S1 Manajemen / S1 Teknik Elektro', ukm_coe: 'UKM Entrepreneur, UKM Robotik' }, trait: [0.7, 0.98, 0.8, 0.75, 0.9], riasec: [0.8, 0.5, 0.3, 0.5, 0.9, 0.95], work_values: [0.9, 0.9, 0.6, 0.7, 0.6, 0.5], environment: [0.8, 0.8, 0.9, 0.8, 0.8, 0.3] },
+
+            // 9. Hukum & Peradilan
+            { name: 'Pengacara (Lawyer)', domain: 'Hukum & Peradilan', akademik: { sma: 'SMA (IPS/MIPA)', kuliah: 'S1 Hukum', ukm_coe: 'UKM English Club, Duta Teknokrat' }, trait: [0.9, 0.9, 0.95, 0.6, 0.9], riasec: [0.2, 0.85, 0.4, 0.8, 0.98, 0.85], work_values: [0.6, 0.98, 0.7, 0.8, 0.7, 0.4], environment: [0.2, 0.8, 0.2, 0.95, 0.9, 0.1] },
+            { name: 'Hakim / Jaksa', domain: 'Hukum & Peradilan', akademik: { sma: 'SMA (IPS/MIPA)', kuliah: 'S1 Hukum', ukm_coe: 'UKM Resimen Mahasiswa, Duta Teknokrat' }, trait: [0.75, 0.98, 0.6, 0.75, 0.98], riasec: [0.2, 0.9, 0.3, 0.7, 0.85, 0.98], work_values: [0.98, 0.9, 0.9, 0.5, 0.4, 0.5], environment: [0.3, 0.5, 0.9, 0.9, 0.98, 0.1] },
+            { name: 'Notaris / PPAT', domain: 'Hukum & Peradilan', akademik: { sma: 'SMA (IPS/MIPA)', kuliah: 'S1 Hukum + Magister Kenotariatan', ukm_coe: 'Duta Teknokrat' }, trait: [0.6, 0.99, 0.5, 0.8, 0.95], riasec: [0.2, 0.7, 0.2, 0.6, 0.7, 0.99], work_values: [0.98, 0.8, 0.6, 0.7, 0.3, 0.8], environment: [0.1, 0.4, 0.95, 0.6, 0.9, 0.1] },
+            { name: 'Legal Consultant (In-House)', domain: 'Hukum & Peradilan', akademik: { sma: 'SMA (IPS/MIPA)', kuliah: 'S1 Hukum', ukm_coe: 'UKM Entrepreneur' }, trait: [0.8, 0.95, 0.7, 0.85, 0.9], riasec: [0.2, 0.85, 0.3, 0.8, 0.85, 0.95], work_values: [0.9, 0.85, 0.7, 0.7, 0.6, 0.7], environment: [0.2, 0.8, 0.8, 0.7, 0.9, 0.1] },
+            { name: 'Paralegal / Staf Hukum', domain: 'Hukum & Peradilan', akademik: { sma: 'SMA (IPS/MIPA) / SMK (Perkantoran)', kuliah: 'S1 Hukum', ukm_coe: 'UKM English Club' }, trait: [0.65, 0.95, 0.6, 0.85, 0.9], riasec: [0.2, 0.7, 0.2, 0.6, 0.6, 0.95], work_values: [0.9, 0.7, 0.6, 0.5, 0.4, 0.8], environment: [0.1, 0.5, 0.9, 0.6, 0.8, 0.1] },
+            { name: 'Mediator Professional', domain: 'Hukum & Peradilan', akademik: { sma: 'SMA (IPS/Bahasa/MIPA)', kuliah: 'S1 Hukum / S1 Psikologi', ukm_coe: 'Duta Teknokrat, UKM English Club' }, trait: [0.85, 0.9, 0.7, 0.99, 0.95], riasec: [0.1, 0.7, 0.4, 0.99, 0.8, 0.9], work_values: [0.7, 0.8, 0.95, 0.9, 0.6, 0.8], environment: [0.2, 0.98, 0.7, 0.6, 0.8, 0.1] },
+            { name: 'Analis Hukum Ketenagakerjaan', domain: 'Hukum & Peradilan', akademik: { sma: 'SMA (IPS/MIPA)', kuliah: 'S1 Hukum / S1 Manajemen', ukm_coe: 'UKM Entrepreneur' }, trait: [0.75, 0.98, 0.6, 0.85, 0.9], riasec: [0.2, 0.9, 0.3, 0.8, 0.7, 0.98], work_values: [0.9, 0.85, 0.85, 0.7, 0.6, 0.7], environment: [0.3, 0.85, 0.9, 0.7, 0.9, 0.1] },
+            { name: 'Legal Tech Specialist', domain: 'Hukum & Peradilan', akademik: { sma: 'SMA (MIPA) / SMK (RPL)', kuliah: 'S1 Hukum / S1 Sistem Informasi', ukm_coe: 'UKM Programming, CoE Digital Governance' }, trait: [0.9, 0.95, 0.5, 0.7, 0.9], riasec: [0.3, 0.95, 0.4, 0.5, 0.7, 0.95], work_values: [0.8, 0.9, 0.6, 0.8, 0.9, 0.8], environment: [0.7, 0.7, 0.8, 0.7, 0.6, 0.1] },
+            { name: 'Petugas Kepatuhan (Compliance Officer)', domain: 'Hukum & Peradilan', akademik: { sma: 'SMA (IPS/MIPA) / SMK (Akuntansi)', kuliah: 'S1 Hukum / S1 Akuntansi', ukm_coe: 'UKM Akuntansi' }, trait: [0.6, 0.99, 0.5, 0.8, 0.95], riasec: [0.2, 0.7, 0.2, 0.6, 0.7, 0.99], work_values: [0.99, 0.85, 0.7, 0.6, 0.3, 0.8], environment: [0.2, 0.6, 0.99, 0.7, 0.9, 0.1] },
+            { name: 'Kurator / Pengurus Kepailitan', domain: 'Hukum & Peradilan', akademik: { sma: 'SMA (IPS/MIPA)', kuliah: 'S1 Hukum / S1 Akuntansi', ukm_coe: 'UKM Akuntansi, UKM Entrepreneur' }, trait: [0.8, 0.98, 0.8, 0.6, 0.9], riasec: [0.3, 0.8, 0.3, 0.5, 0.9, 0.98], work_values: [0.7, 0.95, 0.5, 0.7, 0.6, 0.5], environment: [0.3, 0.8, 0.8, 0.9, 0.9, 0.1] },
+
+            // 10. Pariwisata & Hospitality
+            { name: 'Hotel Manager / GM', domain: 'Pariwisata & Hospitality', akademik: { sma: 'SMA / SMK (Perhotelan)', kuliah: 'S1 Perhotelan / S1 Manajemen', ukm_coe: 'Duta Teknokrat, UKM Entrepreneur' }, trait: [0.85, 0.9, 0.95, 0.9, 0.9], riasec: [0.4, 0.5, 0.6, 0.9, 0.98, 0.9], work_values: [0.8, 0.9, 0.8, 0.7, 0.6, 0.5], environment: [0.2, 0.98, 0.4, 0.85, 0.9, 0.2] },
+            { name: 'Chef de Cuisine / Executive Chef', domain: 'Pariwisata & Hospitality', akademik: { sma: 'SMA / SMK (Tata Boga)', kuliah: 'D4/S1 Seni Kuliner', ukm_coe: 'UKM Entrepreneur' }, trait: [0.9, 0.9, 0.8, 0.7, 0.85], riasec: [0.95, 0.3, 0.98, 0.7, 0.9, 0.8], work_values: [0.6, 0.95, 0.6, 0.8, 0.98, 0.4], environment: [0.9, 0.9, 0.3, 0.95, 0.6, 0.1] },
+            { name: 'Event / Wedding Organizer', domain: 'Pariwisata & Hospitality', akademik: { sma: 'SMA (Bebas) / SMK (Perhotelan/Tata Boga)', kuliah: 'S1 Manajemen / S1 Komunikasi', ukm_coe: 'UKM Musik / Band, Duta Teknokrat' }, trait: [0.9, 0.9, 0.98, 0.9, 0.8], riasec: [0.3, 0.4, 0.9, 0.8, 0.98, 0.9], work_values: [0.5, 0.95, 0.7, 0.8, 0.95, 0.5], environment: [0.4, 0.98, 0.2, 0.9, 0.5, 0.5] },
+            { name: 'Pramugari / Pramugara', domain: 'Pariwisata & Hospitality', akademik: { sma: 'SMA (Bebas) / SMK (Perhotelan)', kuliah: 'S1 Sastra Inggris / S1 Komunikasi', ukm_coe: 'Duta Teknokrat, UKM English Club' }, trait: [0.75, 0.95, 0.98, 0.95, 0.95], riasec: [0.5, 0.4, 0.6, 0.98, 0.8, 0.95], work_values: [0.7, 0.8, 0.8, 0.4, 0.3, 0.4], environment: [0.5, 0.98, 0.5, 0.8, 0.9, 0.4] },
+            { name: 'Tour Guide Specialist', domain: 'Pariwisata & Hospitality', akademik: { sma: 'SMA (Bahasa/IPS) / SMK (Usaha Perjalanan)', kuliah: 'S1 Sastra Inggris / S1 Pariwisata', ukm_coe: 'UKM English Club, UKM Pencinta Alam' }, trait: [0.95, 0.85, 0.98, 0.9, 0.85], riasec: [0.6, 0.7, 0.8, 0.95, 0.85, 0.7], work_values: [0.4, 0.85, 0.9, 0.9, 0.8, 0.7], environment: [0.4, 0.98, 0.2, 0.6, 0.5, 0.98] },
+            { name: 'Pastry Chef (Baker)', domain: 'Pariwisata & Hospitality', akademik: { sma: 'SMA / SMK (Tata Boga)', kuliah: 'D4/S1 Seni Kuliner', ukm_coe: 'UKM Entrepreneur' }, trait: [0.85, 0.98, 0.6, 0.8, 0.85], riasec: [0.9, 0.4, 0.95, 0.5, 0.6, 0.95], work_values: [0.7, 0.9, 0.6, 0.7, 0.95, 0.7], environment: [0.9, 0.5, 0.6, 0.8, 0.6, 0.1] },
+            { name: 'F&B Manager', domain: 'Pariwisata & Hospitality', akademik: { sma: 'SMA / SMK (Tata Boga/Perhotelan)', kuliah: 'S1 Perhotelan / S1 Manajemen', ukm_coe: 'UKM Entrepreneur' }, trait: [0.8, 0.95, 0.9, 0.85, 0.9], riasec: [0.6, 0.5, 0.4, 0.8, 0.95, 0.95], work_values: [0.85, 0.95, 0.7, 0.8, 0.85, 0.5], environment: [0.6, 0.98, 0.6, 0.9, 0.8, 0.2] },
+            { name: 'Travel Blogger / Influencer', domain: 'Pariwisata & Hospitality', akademik: { sma: 'SMA (Bebas)', kuliah: 'S1 Komunikasi / S1 Sastra Inggris', ukm_coe: 'UKM Film, Duta Teknokrat' }, trait: [0.98, 0.75, 0.99, 0.85, 0.75], riasec: [0.4, 0.6, 0.98, 0.8, 0.9, 0.5], work_values: [0.3, 0.9, 0.7, 0.98, 0.98, 0.8], environment: [0.3, 0.8, 0.1, 0.7, 0.2, 0.99] },
+            { name: 'Concierge Specialist', domain: 'Pariwisata & Hospitality', akademik: { sma: 'SMA / SMK (Perhotelan)', kuliah: 'S1 Sastra Inggris / S1 Pariwisata', ukm_coe: 'Duta Teknokrat, UKM English Club' }, trait: [0.7, 0.95, 0.95, 0.98, 0.95], riasec: [0.3, 0.4, 0.5, 0.99, 0.8, 0.9], work_values: [0.8, 0.7, 0.98, 0.5, 0.4, 0.5], environment: [0.2, 0.99, 0.7, 0.6, 0.8, 0.2] },
+            { name: 'Cruise Ship Staff', domain: 'Pariwisata & Hospitality', akademik: { sma: 'SMA / SMK (Perhotelan/Pelayaran)', kuliah: 'S1 Pariwisata / S1 Sastra Inggris', ukm_coe: 'UKM English Club, UKM Musik' }, trait: [0.75, 0.9, 0.98, 0.9, 0.9], riasec: [0.6, 0.4, 0.7, 0.95, 0.85, 0.85], work_values: [0.6, 0.85, 0.8, 0.8, 0.6, 0.4], environment: [0.8, 0.98, 0.3, 0.8, 0.7, 0.99] },
+
+            // 11. Media & Jurnalistik
+            { name: 'News Anchor / Presenter', domain: 'Media & Jurnalistik', akademik: { sma: 'SMA (IPS/Bahasa)', kuliah: 'S1 Komunikasi / S1 Sastra Inggris', ukm_coe: 'Duta Teknokrat, UKM Musik / English Club' }, trait: [0.85, 0.9, 0.99, 0.85, 0.9], riasec: [0.1, 0.6, 0.9, 0.85, 0.95, 0.7], work_values: [0.6, 0.95, 0.7, 0.6, 0.7, 0.5], environment: [0.2, 0.9, 0.2, 0.9, 0.95, 0.1] },
+            { name: 'Investigative Journalist', domain: 'Media & Jurnalistik', akademik: { sma: 'SMA (IPS/Bahasa)', kuliah: 'S1 Komunikasi / S1 Sastra Inggris', ukm_coe: 'UKM English Club, UKM Penelitian' }, trait: [0.98, 0.9, 0.85, 0.7, 0.9], riasec: [0.3, 0.98, 0.7, 0.8, 0.8, 0.8], work_values: [0.5, 0.9, 0.95, 0.95, 0.8, 0.5], environment: [0.4, 0.6, 0.2, 0.9, 0.7, 0.7] },
+            { name: 'Public Relations Manager', domain: 'Media & Jurnalistik', akademik: { sma: 'SMA (IPS/Bahasa)', kuliah: 'S1 Komunikasi / S1 Manajemen', ukm_coe: 'Duta Teknokrat, UKM English Club' }, trait: [0.9, 0.9, 0.98, 0.9, 0.85], riasec: [0.2, 0.7, 0.7, 0.95, 0.98, 0.8], work_values: [0.7, 0.95, 0.85, 0.8, 0.8, 0.6], environment: [0.2, 0.98, 0.3, 0.85, 0.8, 0.1] },
+            { name: 'Editor in Chief', domain: 'Media & Jurnalistik', akademik: { sma: 'SMA (Bahasa/IPS)', kuliah: 'S1 Komunikasi / S1 Sastra Inggris', ukm_coe: 'UKM English Club' }, trait: [0.95, 0.98, 0.7, 0.8, 0.9], riasec: [0.2, 0.9, 0.8, 0.8, 0.8, 0.98], work_values: [0.8, 0.95, 0.7, 0.85, 0.8, 0.6], environment: [0.3, 0.8, 0.6, 0.8, 0.9, 0.1] },
+            { name: 'Digital Media Strategist', domain: 'Media & Jurnalistik', akademik: { sma: 'SMA (Bebas) / SMK (Multimedia)', kuliah: 'S1 Sistem Informasi / S1 Komunikasi', ukm_coe: 'UKM Animedia, CoE Big Data Analytics' }, trait: [0.98, 0.9, 0.8, 0.8, 0.8], riasec: [0.2, 0.9, 0.8, 0.6, 0.9, 0.85], work_values: [0.6, 0.95, 0.6, 0.9, 0.98, 0.7], environment: [0.4, 0.8, 0.3, 0.8, 0.3, 0.1] },
+            { name: 'Social Media Specialist', domain: 'Media & Jurnalistik', akademik: { sma: 'SMA (Bebas) / SMK (Multimedia)', kuliah: 'S1 Komunikasi / S1 Sistem Informasi', ukm_coe: 'UKM Animedia, Duta Teknokrat' }, trait: [0.95, 0.8, 0.95, 0.85, 0.75], riasec: [0.2, 0.6, 0.9, 0.7, 0.95, 0.7], work_values: [0.4, 0.95, 0.6, 0.95, 0.98, 0.8], environment: [0.3, 0.85, 0.2, 0.8, 0.2, 0.1] },
+            { name: 'Photojournalist', domain: 'Media & Jurnalistik', akademik: { sma: 'SMA (Bebas)', kuliah: 'S1 Komunikasi / S1 DKV', ukm_coe: 'UKM Film, UKM Animedia' }, trait: [0.98, 0.85, 0.9, 0.75, 0.85], riasec: [0.7, 0.6, 0.99, 0.7, 0.8, 0.6], work_values: [0.4, 0.9, 0.8, 0.95, 0.95, 0.6], environment: [0.6, 0.7, 0.2, 0.95, 0.5, 0.99] },
+            { name: 'Radio Announcer / Podcaster', domain: 'Media & Jurnalistik', akademik: { sma: 'SMA (Bebas) / SMK (Broadcasting)', kuliah: 'S1 Komunikasi / S1 Sastra Inggris', ukm_coe: 'UKM Musik / Band, Duta Teknokrat' }, trait: [0.9, 0.7, 0.99, 0.9, 0.85], riasec: [0.1, 0.4, 0.98, 0.9, 0.9, 0.6], work_values: [0.4, 0.9, 0.7, 0.95, 0.98, 0.8], environment: [0.2, 0.98, 0.2, 0.8, 0.3, 0.1] },
+            { name: 'Press Secretary', domain: 'Media & Jurnalistik', akademik: { sma: 'SMA (IPS/Bahasa)', kuliah: 'S1 Komunikasi / S1 Hukum', ukm_coe: 'Duta Teknokrat, UKM English Club' }, trait: [0.8, 0.98, 0.95, 0.8, 0.9], riasec: [0.2, 0.8, 0.6, 0.9, 0.95, 0.9], work_values: [0.8, 0.95, 0.8, 0.7, 0.6, 0.5], environment: [0.2, 0.95, 0.4, 0.9, 0.95, 0.1] },
+            { name: 'Documentary Filmmaker', domain: 'Media & Jurnalistik', akademik: { sma: 'SMA (Bebas)', kuliah: 'S1 Komunikasi / S1 Sastra Inggris', ukm_coe: 'UKM Film, UKM Animedia' }, trait: [0.99, 0.85, 0.85, 0.8, 0.8], riasec: [0.5, 0.9, 0.99, 0.6, 0.8, 0.7], work_values: [0.4, 0.95, 0.9, 0.98, 0.98, 0.7], environment: [0.6, 0.6, 0.3, 0.9, 0.5, 0.98] },
+
+            // 12. Keagamaan, Spiritual & Pembinaan Masyarakat
+            { name: 'Penyuluh Agama / Dai', domain: 'Keagamaan, Spiritual & Pembinaan Masyarakat', akademik: { sma: 'SMA (Agama/Bahasa)', kuliah: 'S1 Hukum Islam / S1 Sastra Inggris', ukm_coe: 'UKM Islam AR-Rahman' }, trait: [0.8, 0.95, 0.9, 0.98, 0.95], riasec: [0.2, 0.7, 0.5, 0.99, 0.9, 0.8], work_values: [0.85, 0.8, 0.99, 0.7, 0.5, 0.7], environment: [0.2, 0.98, 0.5, 0.5, 0.7, 0.4] },
+            { name: 'Konselor Spiritual', domain: 'Keagamaan, Spiritual & Pembinaan Masyarakat', akademik: { sma: 'SMA (IPS/Agama)', kuliah: 'S1 Psikologi / S1 Hukum', ukm_coe: 'UKM Islam AR-Rahman / UKM Kristen-Katolik' }, trait: [0.85, 0.9, 0.7, 0.99, 0.95], riasec: [0.1, 0.8, 0.5, 0.99, 0.6, 0.8], work_values: [0.8, 0.7, 0.99, 0.8, 0.6, 0.8], environment: [0.1, 0.95, 0.9, 0.5, 0.8, 0.1] },
+            { name: 'Pengurus Lembaga Amil / Filantropi', domain: 'Keagamaan, Spiritual & Pembinaan Masyarakat', akademik: { sma: 'SMA (Ekonomi/Agama) / SMK (Akuntansi)', kuliah: 'S1 Akuntansi / S1 Manajemen', ukm_coe: 'UKM Entrepreneur' }, trait: [0.7, 0.98, 0.75, 0.95, 0.9], riasec: [0.3, 0.6, 0.4, 0.9, 0.85, 0.98], work_values: [0.9, 0.85, 0.99, 0.6, 0.5, 0.7], environment: [0.3, 0.8, 0.8, 0.7, 0.9, 0.1] },
+            { name: 'Peneliti Budaya & Agama', domain: 'Keagamaan, Spiritual & Pembinaan Masyarakat', akademik: { sma: 'SMA (Bahasa/IPS)', kuliah: 'S1 Sastra Inggris / S1 Sosiologi', ukm_coe: 'UKM Penelitian' }, trait: [0.98, 0.9, 0.5, 0.9, 0.9], riasec: [0.2, 0.98, 0.7, 0.85, 0.6, 0.85], work_values: [0.7, 0.8, 0.9, 0.9, 0.8, 0.7], environment: [0.4, 0.5, 0.7, 0.5, 0.7, 0.4] },
+            { name: 'Pemberdaya Masyarakat (CSR Officer)', domain: 'Keagamaan, Spiritual & Pembinaan Masyarakat', akademik: { sma: 'SMA / SMK (Bebas)', kuliah: 'S1 Komunikasi / S1 Manajemen', ukm_coe: 'Duta Teknokrat, UKM Entrepreneur' }, trait: [0.85, 0.9, 0.9, 0.95, 0.85], riasec: [0.5, 0.6, 0.5, 0.98, 0.9, 0.7], work_values: [0.7, 0.9, 0.98, 0.8, 0.7, 0.6], environment: [0.5, 0.95, 0.4, 0.8, 0.6, 0.8] },
+            { name: 'Aktivis Kemanusiaan', domain: 'Keagamaan, Spiritual & Pembinaan Masyarakat', akademik: { sma: 'SMA (Bebas)', kuliah: 'S1 Hubungan Internasional / S1 Psikologi', ukm_coe: 'UKM Kesehatan, KSR-PMI' }, trait: [0.9, 0.9, 0.85, 0.99, 0.95], riasec: [0.3, 0.7, 0.6, 0.99, 0.8, 0.8], work_values: [0.5, 0.8, 0.99, 0.9, 0.7, 0.8], environment: [0.4, 0.9, 0.5, 0.8, 0.6, 0.9] },
+            { name: 'Manajer Lembaga Dakwah Digital', domain: 'Keagamaan, Spiritual & Pembinaan Masyarakat', akademik: { sma: 'SMA (Agama) / SMK (RPL/Multimedia)', kuliah: 'S1 Sistem Informasi / S1 Komunikasi', ukm_coe: 'UKM Islam AR-Rahman, CoE Digital Governance' }, trait: [0.9, 0.95, 0.8, 0.9, 0.9], riasec: [0.3, 0.7, 0.8, 0.9, 0.95, 0.9], work_values: [0.8, 0.9, 0.95, 0.8, 0.9, 0.7], environment: [0.4, 0.9, 0.5, 0.7, 0.6, 0.1] },
+            { name: 'Fasilitator Pemberdayaan Ekonomi Umat', domain: 'Keagamaan, Spiritual & Pembinaan Masyarakat', akademik: { sma: 'SMA (IPS) / SMK (Akuntansi)', kuliah: 'S1 Akuntansi / S1 Manajemen', ukm_coe: 'UKM Entrepreneur, UKM Islam AR-Rahman' }, trait: [0.8, 0.95, 0.85, 0.95, 0.9], riasec: [0.4, 0.6, 0.4, 0.95, 0.95, 0.9], work_values: [0.8, 0.9, 0.99, 0.7, 0.8, 0.6], environment: [0.4, 0.95, 0.5, 0.7, 0.7, 0.4] },
+            { name: 'Arsiparis Sejarah & Budaya', domain: 'Keagamaan, Spiritual & Pembinaan Masyarakat', akademik: { sma: 'SMA (Bahasa/IPS)', kuliah: 'S1 Sastra Inggris / S1 Sistem Informasi', ukm_coe: 'UKM Penelitian' }, trait: [0.6, 0.99, 0.4, 0.8, 0.9], riasec: [0.2, 0.95, 0.5, 0.7, 0.4, 0.99], work_values: [0.99, 0.7, 0.9, 0.5, 0.4, 0.8], environment: [0.1, 0.3, 0.99, 0.5, 0.9, 0.1] },
+            { name: 'Konsultan Filantropi Strategis', domain: 'Keagamaan, Spiritual & Pembinaan Masyarakat', akademik: { sma: 'SMA (IPS/MIPA)', kuliah: 'S1 Manajemen / S1 Psikologi', ukm_coe: 'UKM Entrepreneur, Duta Teknokrat' }, trait: [0.9, 0.98, 0.8, 0.9, 0.9], riasec: [0.2, 0.85, 0.6, 0.9, 0.9, 0.95], work_values: [0.8, 0.95, 0.99, 0.8, 0.7, 0.6], environment: [0.3, 0.9, 0.6, 0.8, 0.8, 0.1] }
+        ];
+
+        const DIMENSION_MAP = {
+            "Openness": { group: 'trait', index: 0 }, "Conscientiousness": { group: 'trait', index: 1 }, "Extraversion": { group: 'trait', index: 2 }, "Agreeableness": { group: 'trait', index: 3 }, "Emotional Stability": { group: 'trait', index: 4 },
+            "Realistic": { group: 'riasec', index: 0 }, "Investigative": { group: 'riasec', index: 1 }, "Artistic": { group: 'riasec', index: 2 }, "Social": { group: 'riasec', index: 3 }, "Enterprising": { group: 'riasec', index: 4 }, "Conventional": { group: 'riasec', index: 5 },
+            "Stabilitas": { group: 'work_values', index: 0 }, "Pencapaian": { group: 'work_values', index: 1 }, "Kontribusi Sosial": { group: 'work_values', index: 2 }, "Otonomi": { group: 'work_values', index: 3 }, "Kreativitas": { group: 'work_values', index: 4 }, "Keseimbangan Hidup": { group: 'work_values', index: 5 },
+            "Teknis vs Komunikasi": { group: 'environment', index: 0 }, "Mandiri vs Kolaboratif": { group: 'environment', index: 1 }, "Statis vs Dinamis": { group: 'environment', index: 2 }, "Low vs High Pressure": { group: 'environment', index: 3 }, "Formal vs Santai": { group: 'environment', index: 4 }, "Indoor vs Outdoor": { group: 'environment', index: 5 }
+        };
+
+        const CATEGORIES = {
+            R: { label: 'Realistic (Praktikal)', icon: <Icons.Briefcase />, color: 'bg-red-100 text-red-700', border: 'border-red-500', desc: 'Menyukai aktivitas fisik, bekerja dengan benda/alat, dan lingkungan outdoor.' },
+            I: { label: 'Investigative (Pemikir)', icon: <Icons.BookOpen />, color: 'bg-blue-100 text-blue-700', border: 'border-blue-500', desc: 'Menyukai observasi, penelitian, analisis data, dan pemecahan masalah logis.' },
+            A: { label: 'Artistic (Kreatif)', icon: <Icons.Camera />, color: 'bg-yellow-100 text-yellow-700', border: 'border-yellow-500', desc: 'Menyukai kebebasan ekspresi, seni, intuisi, dan situasi tidak terstruktur.' },
+            S: { label: 'Social (Penolong)', icon: <Icons.Heart />, color: 'bg-green-100 text-green-700', border: 'border-green-500', desc: 'Menyukai interaksi dengan orang lain untuk membantu, mengajar, atau melayani.' },
+            E: { label: 'Enterprising (Penggerak)', icon: <Icons.ArrowRight />, color: 'bg-purple-100 text-purple-700', border: 'border-purple-500', desc: 'Menyukai memimpin, memengaruhi orang lain, dan berorientasi pada target/bisnis.' },
+            C: { label: 'Conventional (Terorganisir)', icon: <Icons.Calculator />, color: 'bg-gray-100 text-gray-700', border: 'border-gray-500', desc: 'Menyukai keteraturan, data detail, administrasi, dan mengikuti prosedur jelas.' }
+        };
+
+        const RECOMMENDATIONS = {
+            R: { sma: 'Fokus Mapel Pilihan: Fisika, Matematika Tingkat Lanjut, Prakarya', smk: 'Teknik Mesin, Otomotif, TKJ, Pertanian, Logistik', kuliah: 'Teknik, Arsitektur Lanskap, Kehutanan, Peternakan' },
+            I: { sma: 'Fokus Mapel Pilihan: Biologi, Kimia, Fisika, Matematika', smk: 'Teknik Kimia, Farmasi, RPL, Analisis Pengujian Lab', kuliah: 'Ilmu Komputer, Kedokteran, MIPA, Psikologi Riset' },
+            A: { sma: 'Fokus Mapel Pilihan: Seni Budaya, Bahasa Asing, Sastra', smk: 'DKV, Tata Busana, Seni Musik/Tari, Broadcasting, Animasi', kuliah: 'Desain Grafis, Sastra, Seni Rupa, Film & TV, Arsitektur' },
+            S: { sma: 'Fokus Mapel Pilihan: Sosiologi, Antropologi, Bahasa', smk: 'Keperawatan, Pekerjaan Sosial, Pariwisata, Kuliner', kuliah: 'Psikologi, Komunikasi, Keguruan (FKIP), Hubungan Internasional' },
+            E: { sma: 'Fokus Mapel Pilihan: Ekonomi, Sosiologi, Geografi', smk: 'Bisnis Daring, Pemasaran, Perhotelan, Tata Boga', kuliah: 'Manajemen, Bisnis, Hukum, Ilmu Politik, Humas' },
+            C: { sma: 'Fokus Mapel Pilihan: Ekonomi, Matematika, Informatika', smk: 'Akuntansi, Otomatisasi Perkantoran, Perbankan Syariah', kuliah: 'Akuntansi, Statistika, Administrasi Negara, Manajemen Informasi' }
+        };
+
+        const CAREER_DETAILS = {
+            R: { roles: ['Teknisi Robotik/IoT', 'Ahli Agronomi Modern', 'Network Engineer', 'Insinyur Sipil', 'Chef/Culinary'], skills: ['Pengoperasian Mesin', 'Pemahaman Teknis', 'Fisik & Stamina', 'Safety Awareness'], soft: ['Ketelitian', 'Fokus', 'Mandiri', 'Praktis'], salary: 'Rp 3.5jt - 8jt+' },
+            I: { roles: ['Data Analyst/Scientist', 'Software Developer', 'Apoteker/Farmasi', 'Peneliti Medis', 'Cyber Security'], skills: ['Analisis Data (SQL/Python)', 'Logika Pemrograman', 'Riset Ilmiah', 'Matematika'], soft: ['Berpikir Kritis', 'Rasa Ingin Tahu', 'Problem Solving', 'Skeptis'], salary: 'Rp 4.5jt - 12jt+' },
+            A: { roles: ['UI/UX Designer', 'Content Creator', 'Arsitek', 'Copywriter/Scriptwriter', 'Video Editor'], skills: ['Desain (Figma/Adobe)', 'Video Editing', 'Creative Writing', 'Estetika Visual'], soft: ['Imajinasi', 'Ekspresi Diri', 'Adaptabilitas', 'Originalitas'], salary: 'Rp 3.5jt - 10jt+' },
+            S: { roles: ['Guru/Dosen', 'Psikolog/HRD', 'Perawat', 'Customer Success', 'Social Worker'], skills: ['Public Speaking', 'Konseling', 'Manajemen Kelas', 'P3K/Medis Dasar'], soft: ['Empati', 'Komunikasi', 'Kesabaran', 'Pendengar Baik'], salary: 'Rp 3.5jt - 7jt+' },
+            E: { roles: ['Digital Marketer', 'Product Manager', 'Entrepreneur', 'Sales Manager', 'Lawyer'], skills: ['SEO/SEM', 'Strategi Bisnis', 'Public Relations', 'Negosiasi'], soft: ['Leadership', 'Persuasif', 'Percaya Diri', 'Ambisus'], salary: 'Rp 4jt - Unlimited (Komisi)' },
+            C: { roles: ['Akuntan/Auditor', 'Data Entry Specialist', 'Admin Legal', 'Bankir', 'Quality Control'], skills: ['Excel (Advanced)', 'Sistem Akuntansi', 'Manajemen Arsip', 'Audit'], soft: ['Organisasi', 'Disiplin', 'Detail Oriented', 'Jujur'], salary: 'Rp 4jt - 9jt+' }
+        };
+
+        const QUESTIONS_FULL = [
+            { "id": 1, "modul": "Karakter (Big Five)", "dimensi": "Openness", "soal": "Saya tertarik mencoba cara baru dalam menyelesaikan masalah.", "tipe": "Positif" },
+            { "id": 2, "modul": "Karakter (Big Five)", "dimensi": "Openness", "soal": "Saya menikmati mempelajari hal yang belum saya pahami.", "tipe": "Positif" },
+            { "id": 3, "modul": "Karakter (Big Five)", "dimensi": "Openness", "soal": "Saya terbuka terhadap ide yang berbeda dari kebiasaan saya.", "tipe": "Positif" },
+            { "id": 4, "modul": "Karakter (Big Five)", "dimensi": "Openness", "soal": "Saya senang mengeksplorasi topik di luar bidang utama saya.", "tipe": "Positif" },
+            { "id": 5, "modul": "Karakter (Big Five)", "dimensi": "Openness", "soal": "Saya nyaman menghadapi perubahan dalam aktivitas saya.", "tipe": "Positif" },
+            { "id": 6, "modul": "Karakter (Big Five)", "dimensi": "Openness", "soal": "Saya sering penasaran dengan â€œkenapaâ€ dan â€œbagaimanaâ€.", "tipe": "Positif" },
+            { "id": 7, "modul": "Karakter (Big Five)", "dimensi": "Openness", "soal": "Saya menikmati diskusi yang memunculkan sudut pandang baru.", "tipe": "Positif" },
+            { "id": 8, "modul": "Karakter (Big Five)", "dimensi": "Openness", "soal": "Saya lebih nyaman dengan cara lama daripada mencoba cara baru.", "tipe": "Reflektif" },
+            { "id": 9, "modul": "Karakter (Big Five)", "dimensi": "Openness", "soal": "Saya jarang tertarik pada hal di luar rutinitas saya.", "tipe": "Reflektif" },
+            { "id": 10, "modul": "Karakter (Big Five)", "dimensi": "Openness", "soal": "Saya cenderung menghindari hal yang terasa tidak familiar.", "tipe": "Reflektif" },
+            { "id": 11, "modul": "Karakter (Big Five)", "dimensi": "Conscientiousness", "soal": "Saya terbiasa menyelesaikan tugas sampai tuntas.", "tipe": "Positif" },
+            { "id": 12, "modul": "Karakter (Big Five)", "dimensi": "Conscientiousness", "soal": "Saya berusaha menepati komitmen yang sudah saya buat.", "tipe": "Positif" },
+            { "id": 13, "modul": "Karakter (Big Five)", "dimensi": "Conscientiousness", "soal": "Saya cukup teratur dalam mengatur waktu dan aktivitas.", "tipe": "Positif" },
+            { "id": 14, "modul": "Karakter (Big Five)", "dimensi": "Conscientiousness", "soal": "Saya mempersiapkan diri sebelum mengerjakan sesuatu.", "tipe": "Positif" },
+            { "id": 15, "modul": "Karakter (Big Five)", "dimensi": "Conscientiousness", "soal": "Saya konsisten terhadap rencana yang sudah disusun.", "tipe": "Positif" },
+            { "id": 16, "modul": "Karakter (Big Five)", "dimensi": "Conscientiousness", "soal": "Saya merasa bertanggung jawab atas hasil pekerjaan saya.", "tipe": "Positif" },
+            { "id": 17, "modul": "Karakter (Big Five)", "dimensi": "Conscientiousness", "soal": "Saya memperhatikan detail yang berkaitan dengan tugas.", "tipe": "Positif" },
+            { "id": 18, "modul": "Karakter (Big Five)", "dimensi": "Conscientiousness", "soal": "Saya sering menunda meski tahu tugas itu penting.", "tipe": "Reflektif" },
+            { "id": 19, "modul": "Karakter (Big Five)", "dimensi": "Conscientiousness", "soal": "Saya cenderung bekerja tanpa perencanaan yang jelas.", "tipe": "Reflektif" },
+            { "id": 20, "modul": "Karakter (Big Five)", "dimensi": "Conscientiousness", "soal": "Saya mudah mengabaikan target yang sudah dibuat.", "tipe": "Reflektif" },
+            { "id": 21, "modul": "Karakter (Big Five)", "dimensi": "Extraversion", "soal": "Saya merasa berenergi saat berinteraksi dengan orang lain.", "tipe": "Positif" },
+            { "id": 22, "modul": "Karakter (Big Five)", "dimensi": "Extraversion", "soal": "Saya cukup nyaman berbicara di depan kelompok.", "tipe": "Positif" },
+            { "id": 23, "modul": "Karakter (Big Five)", "dimensi": "Extraversion", "soal": "Saya menikmati kegiatan yang melibatkan banyak orang.", "tipe": "Positif" },
+            { "id": 24, "modul": "Karakter (Big Five)", "dimensi": "Extraversion", "soal": "Saya cenderung aktif dalam diskusi.", "tipe": "Positif" },
+            { "id": 25, "modul": "Karakter (Big Five)", "dimensi": "Extraversion", "soal": "Saya mudah memulai percapapan dengan orang baru.", "tipe": "Positif" },
+            { "id": 26, "modul": "Karakter (Big Five)", "dimensi": "Extraversion", "soal": "Saya merasa bersemangat dalam suasana sosial.", "tipe": "Positif" },
+            { "id": 27, "modul": "Karakter (Big Five)", "dimensi": "Extraversion", "soal": "Saya tidak keberatan menjadi pusat perhatian sesekali.", "tipe": "Positif" },
+            { "id": 28, "modul": "Karakter (Big Five)", "dimensi": "Extraversion", "soal": "Saya lebih memilih menghindari interaksi sosial.", "tipe": "Reflektif" },
+            { "id": 29, "modul": "Karakter (Big Five)", "dimensi": "Extraversion", "soal": "Saya merasa cepat lelah jika terlalu banyak bersosialisasi.", "tipe": "Reflektif" },
+            { "id": 30, "modul": "Karakter (Big Five)", "dimensi": "Extraversion", "soal": "Saya jarang mengekspresikan pendapat secara langsung.", "tipe": "Reflektif" },
+            { "id": 31, "modul": "Karakter (Big Five)", "dimensi": "Agreeableness", "soal": "Saya berusaha memahami perasaan orang lain.", "tipe": "Positif" },
+            { "id": 32, "modul": "Karakter (Big Five)", "dimensi": "Agreeableness", "soal": "Saya menghargai perbedaan pendapat.", "tipe": "Positif" },
+            { "id": 33, "modul": "Karakter (Big Five)", "dimensi": "Agreeableness", "soal": "Saya lebih memilih kerja sama daripada konflik.", "tipe": "Positif" },
+            { "id": 34, "modul": "Karakter (Big Five)", "dimensi": "Agreeableness", "soal": "Saya berusaha bersikap adil dalam menilai orang.", "tipe": "Positif" },
+            { "id": 35, "modul": "Karakter (Big Five)", "dimensi": "Agreeableness", "soal": "Saya peduli pada dampak tindakan saya terhadap orang lain.", "tipe": "Positif" },
+            { "id": 36, "modul": "Karakter (Big Five)", "dimensi": "Agreeableness", "soal": "Saya mudah bekerja dalam tim.", "tipe": "Positif" },
+            { "id": 37, "modul": "Karakter (Big Five)", "dimensi": "Agreeableness", "soal": "Saya berusaha membantu jika ada yang membutuhkan.", "tipe": "Positif" },
+            { "id": 38, "modul": "Karakter (Big Five)", "dimensi": "Agreeableness", "soal": "Saya cenderung mengutamakan kepentingan sendiri.", "tipe": "Reflektif" },
+            { "id": 39, "modul": "Karakter (Big Five)", "dimensi": "Agreeableness", "soal": "Saya sulit menerima sudut pandang yang berbeda.", "tipe": "Reflektif" },
+            { "id": 40, "modul": "Karakter (Big Five)", "dimensi": "Agreeableness", "soal": "Saya tidak terlalu memikirkan perasaan orang lain.", "tipe": "Reflektif" },
+            { "id": 41, "modul": "Karakter (Big Five)", "dimensi": "Emotional Stability", "soal": "Saya cukup tenang saat menghadapi tekanan.", "tipe": "Positif" },
+            { "id": 42, "modul": "Karakter (Big Five)", "dimensi": "Emotional Stability", "soal": "Saya mampu mengendalikan emosi dalam situasi sulit.", "tipe": "Positif" },
+            { "id": 43, "modul": "Karakter (Big Five)", "dimensi": "Emotional Stability", "soal": "Saya tidak mudah panik ketika ada masalah.", "tipe": "Positif" },
+            { "id": 44, "modul": "Karakter (Big Five)", "dimensi": "Emotional Stability", "soal": "Saya bisa bangkit kembali setelah mengalami kegagalan.", "tipe": "Positif" },
+            { "id": 45, "modul": "Karakter (Big Five)", "dimensi": "Emotional Stability", "soal": "Saya jarang larut lama dalam emosi negatif.", "tipe": "Positif" },
+            { "id": 46, "modul": "Karakter (Big Five)", "dimensi": "Emotional Stability", "soal": "Saya merasa cukup stabil secara emosional.", "tipe": "Positif" },
+            { "id": 47, "modul": "Karakter (Big Five)", "dimensi": "Emotional Stability", "soal": "Saya dapat berpikir jernih saat situasi tidak ideal.", "tipe": "Positif" },
+            { "id": 48, "modul": "Karakter (Big Five)", "dimensi": "Emotional Stability", "soal": "Saya mudah merasa cemas berlebihan.", "tipe": "Reflektif" },
+            { "id": 49, "modul": "Karakter (Big Five)", "dimensi": "Emotional Stability", "soal": "Saya sering merasa tegang tanpa alasan jelas.", "tipe": "Reflektif" },
+            { "id": 50, "modul": "Karakter (Big Five)", "dimensi": "Emotional Stability", "soal": "Perasaan negatif sering mengganggu aktivitas saya.", "tipe": "Reflektif" },
+            { "id": 51, "modul": "Minat (RIASEC)", "dimensi": "Realistic", "soal": "Saya tertarik bekerja dengan alat atau mesin secara langsung.", "tipe": "Positif" },
+            { "id": 52, "modul": "Minat (RIASEC)", "dimensi": "Realistic", "soal": "Saya menikmati pekerjaan yang melibatkan aktivitas fisik atau praktik langsung.", "tipe": "Positif" },
+            { "id": 53, "modul": "Minat (RIASEC)", "dimensi": "Realistic", "soal": "Saya tertarik memperbaiki atau merakit sesuatu.", "tipe": "Positif" },
+            { "id": 54, "modul": "Minat (RIASEC)", "dimensi": "Realistic", "soal": "Saya menikmati aktivitas luar ruangan.", "tipe": "Positif" },
+            { "id": 55, "modul": "Minat (RIASEC)", "dimensi": "Realistic", "soal": "Saya tertarik pada pekerjaan yang hasilnya bisa langsung dilihat.", "tipe": "Positif" },
+            { "id": 56, "modul": "Minat (RIASEC)", "dimensi": "Realistic", "soal": "Saya menikmati kegiatan yang membutuhkan keterampilan teknis.", "tipe": "Positif" },
+            { "id": 57, "modul": "Minat (RIASEC)", "dimensi": "Realistic", "soal": "Saya tertarik mempelajari cara kerja benda atau sistem fisik.", "tipe": "Positif" },
+            { "id": 58, "modul": "Minat (RIASEC)", "dimensi": "Realistic", "soal": "Saya menikmati tugas yang bersifat praktis dan nyata.", "tipe": "Positif" },
+            { "id": 59, "modul": "Minat (RIASEC)", "dimensi": "Investigative", "soal": "Saya tertarik menganalisis masalah untuk mencari penyebabnya.", "tipe": "Positif" },
+            { "id": 60, "modul": "Minat (RIASEC)", "dimensi": "Investigative", "soal": "Saya menikmati mempelajari konsep atau teori baru.", "tipe": "Positif" },
+            { "id": 61, "modul": "Minat (RIASEC)", "dimensi": "Investigative", "soal": "Saya tertarik mencoba dan menguji suatu hal untuk melihat hasilnya.", "tipe": "Positif" },
+            { "id": 62, "modul": "Minat (RIASEC)", "dimensi": "Investigative", "soal": "Saya menikmati aktivitas yang membutuhkan berpikir mendalam.", "tipe": "Positif" },
+            { "id": 63, "modul": "Minat (RIASEC)", "dimensi": "Investigative", "soal": "Saya tertarik memecahkan teka-teki atau persoalan logis.", "tipe": "Positif" },
+            { "id": 64, "modul": "Minat (RIASEC)", "dimensi": "Investigative", "soal": "Saya menikmati membaca atau mencari informasi untuk memahami sesuatu.", "tipe": "Positif" },
+            { "id": 65, "modul": "Minat (RIASEC)", "dimensi": "Investigative", "soal": "Saya tertarik bekerja dengan data atau angka.", "tipe": "Positif" },
+            { "id": 66, "modul": "Minat (RIASEC)", "dimensi": "Investigative", "soal": "Saya menikmati kegiatan yang menantang cara berpikir saya.", "tipe": "Positif" },
+            { "id": 67, "modul": "Minat (RIASEC)", "dimensi": "Artistic", "soal": "Saya tertarik mengekspresikan ide secara kreatif.", "tipe": "Positif" },
+            { "id": 68, "modul": "Minat (RIASEC)", "dimensi": "Artistic", "soal": "Saya menikmati kegiatan seni, desain, atau karya visual.", "tipe": "Positif" },
+            { "id": 69, "modul": "Minat (RIASEC)", "dimensi": "Artistic", "soal": "Saya tertarik menulis, menggambar, atau membuat karya kreatif.", "tipe": "Positif" },
+            { "id": 70, "modul": "Minat (RIASEC)", "dimensi": "Artistic", "soal": "Saya menikmati kebebasan dalam mengekspresikan diri.", "tipe": "Positif" },
+            { "id": 71, "modul": "Minat (RIASEC)", "dimensi": "Artistic", "soal": "Saya tertarik pada aktivitas yang tidak terlalu terikat aturan.", "tipe": "Positif" },
+            { "id": 72, "modul": "Minat (RIASEC)", "dimensi": "Artistic", "soal": "Saya menikmati mengembangkan ide orisinal.", "tipe": "Positif" },
+            { "id": 73, "modul": "Minat (RIASEC)", "dimensi": "Artistic", "soal": "Saya tertarik menciptakan sesuatu yang unik.", "tipe": "Positif" },
+            { "id": 74, "modul": "Minat (RIASEC)", "dimensi": "Artistic", "soal": "Saya menikmati kegiatan yang melibatkan imajinasi.", "tipe": "Positif" },
+            { "id": 75, "modul": "Minat (RIASEC)", "dimensi": "Social", "soal": "Saya tertarik membantu orang lain memecahkan masalahnya.", "tipe": "Positif" },
+            { "id": 76, "modul": "Minat (RIASEC)", "dimensi": "Social", "soal": "Saya menikmati berinteraksi dan berkomunikasi dengan banyak orang.", "tipe": "Positif" },
+            { "id": 77, "modul": "Minat (RIASEC)", "dimensi": "Social", "soal": "Saya tertarik mengajar atau membimbing orang lain.", "tipe": "Positif" },
+            { "id": 78, "modul": "Minat (RIASEC)", "dimensi": "Social", "soal": "Saya menikmati kegiatan yang berdampak langsung pada orang lain.", "tipe": "Positif" },
+            { "id": 79, "modul": "Minat (RIASEC)", "dimensi": "Social", "soal": "Saya tertarik bekerja dalam lingkungan yang melibatkan kerja sama.", "tipe": "Positif" },
+            { "id": 80, "modul": "Minat (RIASEC)", "dimensi": "Social", "soal": "Saya menikmati mendengarkan dan memahami orang lain.", "tipe": "Positif" },
+            { "id": 81, "modul": "Minat (RIASEC)", "dimensi": "Social", "soal": "Saya tertarik pada kegiatan pelayanan atau sosial.", "tipe": "Positif" },
+            { "id": 82, "modul": "Minat (RIASEC)", "dimensi": "Social", "soal": "Saya menikmati aktivitas yang berfokus pada hubungan antar manusia.", "tipe": "Positif" },
+            { "id": 83, "modul": "Minat (RIASEC)", "dimensi": "Enterprising", "soal": "Saya tertarik memimpin atau mengarahkan orang lain.", "tipe": "Positif" },
+            { "id": 84, "modul": "Minat (RIASEC)", "dimensi": "Enterprising", "soal": "Saya tertarik memengaruhi cara pandang orang lain melalui penjelasan saya.", "tipe": "Positif" },
+            { "id": 85, "modul": "Minat (RIASEC)", "dimensi": "Enterprising", "soal": "Saya tertarik pada kegiatan bisnis atau kewirausahaan.", "tipe": "Positif" },
+            { "id": 86, "modul": "Minat (RIASEC)", "dimensi": "Enterprising", "soal": "Saya menikmati mengambil inisiatif dalam suatu kegiatan.", "tipe": "Positif" },
+            { "id": 87, "modul": "Minat (RIASEC)", "dimensi": "Enterprising", "soal": "Saya tertarik mengatur atau mengelola suatu proyek.", "tipe": "Positif" },
+            { "id": 88, "modul": "Minat (RIASEC)", "dimensi": "Enterprising", "soal": "Saya menikmati kegiatan yang memiliki tujuan atau hasil yang ingin dicapai.", "tipe": "Positif" },
+            { "id": 89, "modul": "Minat (RIASEC)", "dimensi": "Enterprising", "soal": "Saya tertarik membuat keputusan yang berdampak luas.", "tipe": "Positif" },
+            { "id": 90, "modul": "Minat (RIASEC)", "dimensi": "Enterprising", "soal": "Saya menikmati kegiatan yang melibatkan target atau pencapaian.", "tipe": "Positif" },
+            { "id": 91, "modul": "Minat (RIASEC)", "dimensi": "Conventional", "soal": "Saya tertarik bekerja dengan data, arsip, atau catatan.", "tipe": "Positif" },
+            { "id": 92, "modul": "Minat (RIASEC)", "dimensi": "Conventional", "soal": "Saya menikmati aktivitas yang terstruktur dan teratur.", "tipe": "Positif" },
+            { "id": 93, "modul": "Minat (RIASEC)", "dimensi": "Conventional", "soal": "Saya tertarik pada pekerjaan yang memiliki prosedur jelas.", "tipe": "Positif" },
+            { "id": 94, "modul": "Minat (RIASEC)", "dimensi": "Conventional", "soal": "Saya menikmati mengatur informasi secara rapi.", "tipe": "Positif" },
+            { "id": 95, "modul": "Minat (RIASEC)", "dimensi": "Conventional", "soal": "Saya tertarik pada tugas administrasi atau pengelolaan dokumen.", "tipe": "Positif" },
+            { "id": 96, "modul": "Minat (RIASEC)", "dimensi": "Conventional", "soal": "Saya menikmati mengikuti sistem atau aturan yang sudah ada.", "tipe": "Positif" },
+            { "id": 97, "modul": "Minat (RIASEC)", "dimensi": "Conventional", "soal": "Saya tertarik bekerja dengan detail dan ketelitian.", "tipe": "Positif" },
+            { "id": 98, "modul": "Minat (RIASEC)", "dimensi": "Conventional", "soal": "Saya menikmati kegiatan yang bersifat rutin dan terorganisir.", "tipe": "Positif" },
+            { "id": 99, "modul": "Nilai Kerja", "dimensi": "Stabilitas", "soal": "Saya menganggap kepastian penghasilan sebagai hal yang penting.", "tipe": "Positif" },
+            { "id": 100, "modul": "Nilai Kerja", "dimensi": "Stabilitas", "soal": "Saya merasa lebih tenang jika pekerjaan saya relatif stabil.", "tipe": "Positif" },
+            { "id": 101, "modul": "Nilai Kerja", "dimensi": "Stabilitas", "soal": "Kejelasan aturan dan sistem kerja penting bagi saya.", "tipe": "Positif" },
+            { "id": 102, "modul": "Nilai Kerja", "dimensi": "Stabilitas", "soal": "Saya menghargai pekerjaan yang memberi rasa aman untuk jangka panjang.", "tipe": "Positif" },
+            { "id": 103, "modul": "Nilai Kerja", "dimensi": "Stabilitas", "soal": "Saya cenderung memilih situasi kerja yang minim ketidakpastian.", "tipe": "Positif" },
+            { "id": 104, "modul": "Nilai Kerja", "dimensi": "Pencapaian", "soal": "Saya merasa termotivasi jika hasil kerja saya diakui.", "tipe": "Positif" },
+            { "id": 105, "modul": "Nilai Kerja", "dimensi": "Pencapaian", "soal": "Saya menghargai pencapaian dan hasil yang jelas.", "tipe": "Positif" },
+            { "id": 106, "modul": "Nilai Kerja", "dimensi": "Pencapaian", "soal": "Saya merasa puas ketika usaha saya terlihat dan dihargai.", "tipe": "Positif" },
+            { "id": 107, "modul": "Nilai Kerja", "dimensi": "Pencapaian", "soal": "Kesempatan untuk berkembang dan berprestasi penting bagi saya.", "tipe": "Positif" },
+            { "id": 108, "modul": "Nilai Kerja", "dimensi": "Pencapaian", "soal": "Saya terdorong untuk bekerja lebih baik ketika ada target pencapaian.", "tipe": "Positif" },
+            { "id": 109, "modul": "Nilai Kerja", "dimensi": "Kontribusi Sosial", "soal": "Saya merasa pekerjaan bermakna jika memberi manfaat bagi orang lain.", "tipe": "Positif" },
+            { "id": 110, "modul": "Nilai Kerja", "dimensi": "Kontribusi Sosial", "soal": "Saya menghargai pekerjaan yang berdampak positif pada masyarakat.", "tipe": "Positif" },
+            { "id": 111, "modul": "Nilai Kerja", "dimensi": "Kontribusi Sosial", "soal": "Membantu orang lain melalui pekerjaan adalah hal yang penting bagi saya.", "tipe": "Positif" },
+            { "id": 112, "modul": "Nilai Kerja", "dimensi": "Kontribusi Sosial", "soal": "Saya merasa puas jika pekerjaan saya berkontribusi pada kebaikan bersama.", "tipe": "Positif" },
+            { "id": 113, "modul": "Nilai Kerja", "dimensi": "Kontribusi Sosial", "soal": "Nilai kemanusiaan penting dalam pilihan pekerjaan saya.", "tipe": "Positif" },
+            { "id": 114, "modul": "Nilai Kerja", "dimensi": "Otonomi", "soal": "Saya menghargai kebebasan dalam mengatur cara saya bekerja.", "tipe": "Positif" },
+            { "id": 115, "modul": "Nilai Kerja", "dimensi": "Otonomi", "soal": "Saya merasa lebih nyaman jika memiliki kendali atas waktu kerja saya.", "tipe": "Positif" },
+            { "id": 116, "modul": "Nilai Kerja", "dimensi": "Otonomi", "soal": "Saya menyukai pekerjaan yang memberi ruang untuk mengambil keputusan sendiri.", "tipe": "Positif" },
+            { "id": 117, "modul": "Nilai Kerja", "dimensi": "Otonomi", "soal": "Fleksibilitas dalam bekerja penting bagi saya.", "tipe": "Positif" },
+            { "id": 118, "modul": "Nilai Kerja", "dimensi": "Otonomi", "soal": "Saya menikmati kebebasan menentukan pendekatan kerja saya.", "tipe": "Positif" },
+            { "id": 119, "modul": "Nilai Kerja", "dimensi": "Kreativitas", "soal": "Saya menghargai kesempatan untuk mengekspresikan ide baru.", "tipe": "Positif" },
+            { "id": 120, "modul": "Nilai Kerja", "dimensi": "Kreativitas", "soal": "Saya menikmati pekerjaan yang memberi ruang untuk berkreasi.", "tipe": "Positif" },
+            { "id": 121, "modul": "Nilai Kerja", "dimensi": "Kreativitas", "soal": "Saya merasa tertarik pada pekerjaan yang tidak monoton.", "tipe": "Positif" },
+            { "id": 122, "modul": "Nilai Kerja", "dimensi": "Kreativitas", "soal": "Kebaruan dan inovasi penting dalam pekerjaan bagi saya.", "tipe": "Positif" },
+            { "id": 123, "modul": "Nilai Kerja", "dimensi": "Kreativitas", "soal": "Saya senang mencari cara baru dalam menyelesaikan tugas.", "tipe": "Positif" },
+            { "id": 124, "modul": "Nilai Kerja", "dimensi": "Keseimbangan Hidup", "soal": "Saya menganggap keseimbangan antara kerja dan kehidupan pribadi itu penting.", "tipe": "Positif" },
+            { "id": 125, "modul": "Nilai Kerja", "dimensi": "Keseimbangan Hidup", "soal": "Saya menghargai waktu untuk diri sendiri dan keluarga.", "tipe": "Positif" },
+            { "id": 126, "modul": "Nilai Kerja", "dimensi": "Keseimbangan Hidup", "soal": "Saya tidak ingin pekerjaan mengorbankan kesehatan atau kehidupan pribadi.", "tipe": "Positif" },
+            { "id": 127, "modul": "Nilai Kerja", "dimensi": "Keseimbangan Hidup", "soal": "Saya merasa penting memiliki waktu istirahat yang cukup.", "tipe": "Positif" },
+            { "id": 128, "modul": "Nilai Kerja", "dimensi": "Keseimbangan Hidup", "soal": "Kehidupan di luar pekerjaan sama pentingnya dengan pekerjaan itu sendiri.", "tipe": "Positif" },
+            { "id": 129, "modul": "Preferensi Lingkungan", "dimensi": "Teknis vs Komunikasi", "soal": "Saya merasa lebih nyaman jika aktivitas memiliki aturan yang jelas.", "tipe": "Positif" },
+            { "id": 130, "modul": "Preferensi Lingkungan", "dimensi": "Teknis vs Komunikasi", "soal": "Saya terbantu dengan jadwal atau rencana yang terstruktur.", "tipe": "Positif" },
+            { "id": 131, "modul": "Preferensi Lingkungan", "dimensi": "Teknis vs Komunikasi", "soal": "Saya lebih tenang jika tahu apa yang diharapkan dari saya.", "tipe": "Positif" },
+            { "id": 132, "modul": "Preferensi Lingkungan", "dimensi": "Teknis vs Komunikasi", "soal": "Saya nyaman mengikuti prosedur yang sudah ditetapkan.", "tipe": "Positif" },
+            { "id": 133, "modul": "Preferensi Lingkungan", "dimensi": "Teknis vs Komunikasi", "soal": "Saya merasa terbantu jika langkah-langkah aktivitas sudah jelas.", "tipe": "Positif" },
+            { "id": 134, "modul": "Preferensi Lingkungan", "dimensi": "Mandiri vs Kolaboratif", "soal": "Saya merasa nyaman mengerjakan aktivitas secara mandiri.", "tipe": "Positif" },
+            { "id": 135, "modul": "Preferensi Lingkungan", "dimensi": "Mandiri vs Kolaboratif", "soal": "Saya dapat fokus dengan baik saat bekerja atau belajar sendiri.", "tipe": "Positif" },
+            { "id": 136, "modul": "Preferensi Lingkungan", "dimensi": "Mandiri vs Kolaboratif", "soal": "Saya tidak selalu membutuhkan orang lain untuk menyelesaikan aktivitas.", "tipe": "Positif" },
+            { "id": 137, "modul": "Preferensi Lingkungan", "dimensi": "Mandiri vs Kolaboratif", "soal": "Saya menikmati aktivitas yang memberi ruang untuk bekerja sendiri.", "tipe": "Positif" },
+            { "id": 138, "modul": "Preferensi Lingkungan", "dimensi": "Mandiri vs Kolaboratif", "soal": "Saya merasa efektif saat bertanggung jawab pada tugas saya sendiri.", "tipe": "Positif" },
+            { "id": 139, "modul": "Preferensi Lingkungan", "dimensi": "Statis vs Dinamis", "soal": "Saya lebih nyaman dengan ritme aktivitas yang relatif stabil.", "tipe": "Positif" },
+            { "id": 140, "modul": "Preferensi Lingkungan", "dimensi": "Statis vs Dinamis", "soal": "Saya menyukai aktivitas dengan pola yang tidak sering berubah.", "tipe": "Positif" },
+            { "id": 141, "modul": "Preferensi Lingkungan", "dimensi": "Statis vs Dinamis", "soal": "Saya merasa tenang jika jadwal aktivitas cukup konsisten.", "tipe": "Positif" },
+            { "id": 142, "modul": "Preferensi Lingkungan", "dimensi": "Statis vs Dinamis", "soal": "Saya kurang nyaman jika ritme aktivitas terlalu sering berubah.", "tipe": "Positif" },
+            { "id": 143, "modul": "Preferensi Lingkungan", "dimensi": "Statis vs Dinamis", "soal": "Saya lebih mudah fokus dalam kondisi yang tidak terlalu dinamis.", "tipe": "Positif" },
+            { "id": 144, "modul": "Preferensi Lingkungan", "dimensi": "Low vs High Pressure", "soal": "Saya lebih nyaman menjalani aktivitas tanpa tekanan yang tinggi.", "tipe": "Positif" },
+            { "id": 145, "modul": "Preferensi Lingkungan", "dimensi": "Low vs High Pressure", "soal": "Saya dapat bekerja atau belajar lebih baik dalam suasana yang tenang.", "tipe": "Positif" },
+            { "id": 146, "modul": "Preferensi Lingkungan", "dimensi": "Low vs High Pressure", "soal": "Tekanan berlebih membuat saya sulit menikmati aktivitas.", "tipe": "Positif" },
+            { "id": 147, "modul": "Preferensi Lingkungan", "dimensi": "Low vs High Pressure", "soal": "Saya merasa nyaman jika target atau tuntutan tidak terlalu berat.", "tipe": "Positif" },
+            { "id": 148, "modul": "Preferensi Lingkungan", "dimensi": "Low vs High Pressure", "soal": "Saya lebih fokus jika tidak dikejar banyak tuntutan sekaligus.", "tipe": "Positif" },
+            { "id": 149, "modul": "Preferensi Lingkungan", "dimensi": "Formal vs Santai", "soal": "Saya lebih nyaman dalam suasana aktivitas yang santai.", "tipe": "Positif" },
+            { "id": 150, "modul": "Preferensi Lingkungan", "dimensi": "Formal vs Santai", "soal": "Saya merasa bebas mengekspresikan diri dalam lingkungan yang tidak terlalu kaku.", "tipe": "Positif" },
+            { "id": 151, "modul": "Preferensi Lingkungan", "dimensi": "Formal vs Santai", "soal": "Saya tidak terlalu menyukai suasana aktivitas yang sangat formal.", "tipe": "Positif" },
+            { "id": 152, "modul": "Preferensi Lingkungan", "dimensi": "Formal vs Santai", "soal": "Saya merasa nyaman jika hubungan antarindividu bersifat egaliter.", "tipe": "Positif" },
+            { "id": 153, "modul": "Preferensi Lingkungan", "dimensi": "Formal vs Santai", "soal": "Saya menikmati aktivitas dalam suasana yang tidak terlalu resmi.", "tipe": "Positif" },
+            { "id": 154, "modul": "Preferensi Lingkungan", "dimensi": "Indoor vs Outdoor", "soal": "Saya merasa nyaman melakukan aktivitas yang melibatkan banyak pergerakan.", "tipe": "Positif" },
+            { "id": 155, "modul": "Preferensi Lingkungan", "dimensi": "Indoor vs Outdoor", "soal": "Saya menikmati aktivitas yang tidak selalu dilakukan di satu tempat.", "tipe": "Positif" },
+            { "id": 156, "modul": "Preferensi Lingkungan", "dimensi": "Indoor vs Outdoor", "soal": "Saya merasa lebih hidup jika aktivitas dilakukan di luar ruang tertutup.", "tipe": "Positif" },
+            { "id": 157, "modul": "Preferensi Lingkungan", "dimensi": "Indoor vs Outdoor", "soal": "Saya tidak keberatan berpindah tempat saat menjalani aktivitas.", "tipe": "Positif" },
+            { "id": 158, "modul": "Preferensi Lingkungan", "dimensi": "Indoor vs Outdoor", "soal": "Saya merasa nyaman dengan aktivitas yang melibatkan lingkungan lapangan.", "tipe": "Positif" },
+            { "id": 159, "modul": "Minat (RIASEC)", "dimensi": "Realistic", "soal": "Saya cenderung menghindari pekerjaan kasar atau aktivitas yang mengharuskan saya banyak menggunakan tenaga fisik.", "tipe": "Reflektif" },
+            { "id": 160, "modul": "Minat (RIASEC)", "dimensi": "Investigative", "soal": "Saya merasa cepat bosan jika harus membaca teori, menganalisis data rumit, atau memecahkan teka-teki ilmiah.", "tipe": "Reflektif" },
+            { "id": 161, "modul": "Minat (RIASEC)", "dimensi": "Artistic", "soal": "Saya kurang tertarik pada aktivitas yang menuntut saya untuk berimajinasi atau menciptakan ide-ide seni yang unik.", "tipe": "Reflektif" },
+            { "id": 162, "modul": "Minat (RIASEC)", "dimensi": "Social", "soal": "Mendengarkan keluh kesah atau melayani masalah orang lain sering kali membuat saya merasa cepat lelah.", "tipe": "Reflektif" },
+            { "id": 163, "modul": "Minat (RIASEC)", "dimensi": "Enterprising", "soal": "Saya merasa tidak nyaman jika ditunjuk sebagai pemimpin atau harus membujuk orang lain demi mencapai target.", "tipe": "Reflektif" },
+            { "id": 164, "modul": "Minat (RIASEC)", "dimensi": "Conventional", "soal": "Saya sangat tidak suka pekerjaan yang berulang-ulang, menuntut ketelitian tinggi, dan berurusan dengan pengarsipan/data.", "tipe": "Reflektif" },
+            { "id": 165, "modul": "Nilai Kerja", "dimensi": "Pencapaian", "soal": "Bagi saya, mencapai target atau prestasi yang luar biasa tidak terlalu penting asalkan pekerjaan saya selesai.", "tipe": "Reflektif" },
+            { "id": 166, "modul": "Nilai Kerja", "dimensi": "Otonomi", "soal": "Saya merasa kesulitan jika harus mengambil inisiatif sendiri tanpa ada instruksi atau arahan yang jelas dari atasan.", "tipe": "Reflektif" },
+            { "id": 167, "modul": "Nilai Kerja", "dimensi": "Uang/Gaji", "soal": "Gaji yang besar dan status sosial tidak menjadi prioritas utama saya saat memilih sebuah pekerjaan.", "tipe": "Reflektif" },
+            { "id": 168, "modul": "Nilai Kerja", "dimensi": "Kontribusi Sosial", "soal": "Saya bekerja murni untuk kemajuan diri sendiri dan tidak terlalu memikirkan apakah pekerjaan saya berdampak bagi masyarakat.", "tipe": "Reflektif" },
+            { "id": 169, "modul": "Nilai Kerja", "dimensi": "Stabilitas", "soal": "Saya tidak masalah mengambil pekerjaan dengan risiko tinggi dan tanpa jaminan masa depan yang pasti.", "tipe": "Reflektif" },
+            { "id": 170, "modul": "Nilai Kerja", "dimensi": "Kreativitas", "soal": "Saya siap bekerja di lingkungan dengan fasilitas yang kurang memadai asalkan pekerjaannya cocok dengan saya.", "tipe": "Reflektif" },
+            { "id": 171, "modul": "Preferensi Lingkungan", "dimensi": "Teknis vs Komunikasi", "soal": "Saya merasa sangat terkekang dan bosan jika harus bekerja mengikuti prosedur, aturan, atau jadwal yang sangat kaku.", "tipe": "Reflektif" },
+            { "id": 172, "modul": "Preferensi Lingkungan", "dimensi": "Mandiri vs Kolaboratif", "soal": "Saya merasa kesulitan dan kurang termotivasi jika harus menyelesaikan sebuah proyek besar tanpa bantuan orang lain.", "tipe": "Reflektif" },
+            { "id": 173, "modul": "Preferensi Lingkungan", "dimensi": "Statis vs Dinamis", "soal": "Saya merasa jenuh bekerja di lingkungan yang ritmenya selalu sama dan jarang ada tantangan baru.", "tipe": "Reflektif" },
+            { "id": 174, "modul": "Preferensi Lingkungan", "dimensi": "Low vs High Pressure", "soal": "Saya justru merasa kurang bersemangat jika tidak ada tuntutan target kerja atau tenggat waktu (deadline) yang ketat.", "tipe": "Reflektif" },
+            { "id": 175, "modul": "Preferensi Lingkungan", "dimensi": "Formal vs Santai", "soal": "Menurut saya, suasana kerja yang terlalu santai dan tidak memiliki aturan seragam akan menurunkan profesionalisme saya.", "tipe": "Reflektif" },
+            { "id": 176, "modul": "Preferensi Lingkungan", "dimensi": "Indoor vs Outdoor", "soal": "Bekerja berpindah-pindah tempat atau berada di luar ruangan sangat menguras energi saya; saya lebih suka diam di ruangan.", "tipe": "Reflektif" }
+        ];
+
+        // --- ALGORITMA SAMPLING & MESIN ---
+        const getQuestions = (mode) => {
+            // Mode lengkap mengembalikan seluruh soal tanpa dipotong
+            if (mode === 'lengkap') return [...QUESTIONS_FULL];
+
+            let limit = mode === 'cepat' ? 40 : 20;
+
+            // Mengelompokkan soal berdasarkan dimensi (Stratified)
+            const grouped = {};
+            QUESTIONS_FULL.forEach(q => {
+                if (!grouped[q.dimensi]) grouped[q.dimensi] = [];
+                grouped[q.dimensi].push(q);
+            });
+
+            // Mengacak urutan soal di dalam masing-masing dimensi
+            for (let dim in grouped) {
+                grouped[dim] = grouped[dim].sort(() => 0.5 - Math.random());
+            }
+
+            // Mengacak urutan dimensi agar adil
+            let dimensions = Object.keys(grouped).sort(() => 0.5 - Math.random());
+            let selected = [];
+
+            // Round-robin selection: mengambil 1 soal bergantian dari tiap dimensi sampai target limit tercapai
+            let idx = 0;
+            while (selected.length < limit) {
+                let dim = dimensions[idx % dimensions.length];
+                if (grouped[dim].length > 0) {
+                    selected.push(grouped[dim].shift());
+                }
+                idx++;
+            }
+
+            // Mengacak urutan hasil akhir sebelum diberikan kepada user
+            return selected.sort(() => 0.5 - Math.random());
+        };
+
+        // --- SUB COMPONENTS ---
+
+        const generateAnalysis = (primary, secondary) => {
+            const primaryData = CATEGORIES[primary];
+            const secondaryData = CATEGORIES[secondary];
+            return `Berdasarkan hasil asesmen, kamu memiliki pola minat yang unik. Kekuatan terbesarmu ada pada tipe **${primaryData.label}**. \nIni berarti kamu cenderung memiliki energi alami saat ${primaryData.desc.toLowerCase()} \n\nNamun, kamu tidak hanya satu dimensi. Kamu juga memiliki sisi **${secondaryData.label}** yang cukup kuat. \nKombinasi ini menarik karena kamu bisa menyeimbangkan antara fokus utama dengan kemampuan pendukung dari tipe kedua.\n\n**Saran Pengambilan Keputusan:**\nJangan merasa tertekan untuk memilih satu jalur yang "sempurna". Gunakan hasil ini sebagai kompas. \nJika kamu memilih lanjut kuliah atau bekerja, carilah lingkungan yang menghargai kemampuanmu dalam ${primaryData.desc.split(',')[0].toLowerCase()}. \nHasil ini bukan vonis, melainkan cermin potensi yang bisa kamu asah lebih jauh.`;
+        };
+
+        const VariantAssessment = ({ mode, onBack }) => {
+            const [step, setStep] = useState('identity');
+            const [user, setUser] = useState({ name: '', date: '' });
+            const [scores, setScores] = useState({});
+            const [counts, setCounts] = useState({});
+            const [rawAnswers, setRawAnswers] = useState([]);
+            const [idx, setIdx] = useState(0);
+
+            const questions = useMemo(() => getQuestions(mode), [mode]);
+
+            useEffect(() => {
+                const today = new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                setUser(u => ({ ...u, date: today }));
+            }, []);
+
+            useEffect(() => {
+                if (step === 'result') {
+                    // Sync hasil ketika masuk ke halaman hasil
+                    syncToGoogleSheet("hasil_asesmen", { nama: user.name, tanggal: user.date, mode: mode, rawAnswers: rawAnswers });
+                }
+            }, [step]);
+
+            const handleStartQuiz = (e) => {
+                e.preventDefault();
+                if (user.name.trim()) {
+                    syncToGoogleSheet("mulai_asesmen", { nama: user.name, tanggal: user.date, mode: mode });
+                    setStep('quiz');
+                }
+            };
+            const [showReviewModal, setShowReviewModal] = useState(false);
+            const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+
+            const handleAnswer = (val) => {
+                const q = questions[idx];
+                let finalVal = val;
+                if (q.tipe === 'Reflektif') {
+                    finalVal = 6 - val; // Reverse scoring skala 5
+                }
+
+                setScores(prev => ({ ...prev, [q.dimensi]: (prev[q.dimensi] || 0) + finalVal }));
+                setCounts(prev => ({ ...prev, [q.dimensi]: (prev[q.dimensi] || 0) + 1 }));
+                setRawAnswers(prev => {
+                    const newAnswers = [...prev];
+                    newAnswers[idx] = val; // Store at specific index
+                    return newAnswers;
+                });
+
+                if (idx < questions.length - 1) setIdx(idx + 1);
+                else setShowReviewModal(true); // Tampilkan modal review di akhir
+            };
+
+            const [isPrinting, setIsPrinting] = useState(false);
+            const [pendingPrint, setPendingPrint] = useState(false);
+
+            const handlePrint = () => {
+                const element = document.getElementById('printable-result');
+                if (!element) return;
+
+                setIsPrinting(true);
+
+                try {
+                    if (typeof window.html2pdf === 'undefined') {
+                        throw new Error("Library html2pdf belum termuat");
+                    }
+
+                    const opt = {
+                        margin: [5, 5, 5, 5],
+                        filename: `Hasil_Asesmen_${user.name.replace(/ /g, '_')}.pdf`,
+                        image: { type: 'jpeg', quality: 0.98 },
+                        html2canvas: { scale: 2, useCORS: true, logging: false },
+                        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                    };
+
+                    window.html2pdf().set(opt).from(element).save()
+                        .then(() => setIsPrinting(false))
+                        .catch(err => {
+                            console.error("PDF Error:", err);
+                            setIsPrinting(false);
+                            window.print(); // Fallback
+                        });
+                } catch (error) {
+                    console.error("PDF Exception:", error);
+                    setIsPrinting(false);
+                    window.print(); // Fallback
+                }
+            };
+
+            const handlePrintClick = () => {
+                if (localStorage.getItem('EduTalent_has_reviewed') === 'true') {
+                    handlePrint();
+                } else {
+                    setPendingPrint(true);
+                    setShowFeedbackModal(true);
+                }
+            };
+
+            if (step === 'identity') return (
+                <div className="max-w-xl w-full mx-auto bg-white rounded-2xl shadow-xl p-8 mt-10 border-t-8 border-red-800">
+                    <button onClick={onBack} className="text-gray-400 hover:text-gray-600 mb-6 flex items-center gap-1"><Icons.ArrowLeft size={16} /> Menu Utama</button>
+                    <div className="text-center mb-8"><div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 text-yellow-600"><Icons.FileText size={32} /></div><h1 className="text-2xl font-bold text-red-900">Asesmen Karakter: Mode {mode.charAt(0).toUpperCase() + mode.slice(1)}</h1><p className="text-gray-500">Terdapat {questions.length} pertanyaan pada sesi ini.</p></div>
+                    <form onSubmit={handleStartQuiz} className="space-y-4">
+                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap Mahasiswa / Siswa</label><input required type="text" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-800 outline-none" placeholder="Masukkan nama Anda..." value={user.name} onChange={(e) => setUser({ ...user, name: e.target.value })} /></div>
+                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Asesmen</label><input disabled type="text" className="w-full p-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-500" value={user.date} /></div>
+                        <button type="submit" className="w-full bg-red-800 text-white py-3 rounded-lg font-bold hover:bg-red-900 transition-colors">Lanjut ke Soal</button>
+                    </form>
+                </div>
+            );
+
+            if (step === 'quiz') {
+                const q = questions[idx];
+                const progress = ((idx + 1) / questions.length) * 100;
+
+                const labelMap = { 5: "Sangat Setuju", 4: "Setuju", 3: "Netral", 2: "Tidak Setuju", 1: "Sangat Tidak Setuju" };
+
+                return (
+                    <div className="max-w-2xl mx-auto mt-10 relative">
+                        {/* KOTAK KUIS */}
+                        <div className="bg-white rounded-2xl shadow-lg p-8 border-t-8 border-red-800 relative z-10">
+                            <div className="flex justify-between text-sm text-gray-500 mb-2"><span>Soal {idx + 1} dari {questions.length}</span><span>{Math.round(progress)}%</span></div>
+                            <div className="w-full bg-gray-200 rounded-full h-2 mb-8"><div className="bg-red-800 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div></div>
+                            <h2 className="text-xl md:text-2xl font-bold text-center mb-8 text-gray-800 leading-relaxed">"{q.soal}"</h2>
+                            <div className="grid gap-3">
+                                {[5, 4, 3, 2, 1].map(val => (
+                                    <button
+                                        key={val}
+                                        onClick={() => handleAnswer(val)}
+                                        className={`p-4 border rounded-xl text-left font-medium transition-all ${rawAnswers[idx] === val ? 'bg-red-800 text-white border-red-800 shadow-md transform scale-[1.02]' : 'bg-gray-50 border-gray-100 text-gray-800 hover:bg-gray-100'}`}>
+                                        {labelMap[val]}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="mt-8 flex justify-between items-center border-t pt-6">
+                                <button
+                                    onClick={() => idx > 0 && setIdx(idx - 1)}
+                                    disabled={idx === 0}
+                                    className="flex items-center gap-2 px-4 py-2 text-gray-500 hover:text-red-800 font-bold disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                                    <Icons.ArrowLeft size={18} /> Kembali
+                                </button>
+
+                                <button
+                                    onClick={() => setShowReviewModal(true)}
+                                    className="p-2 text-gray-400 hover:text-red-700 transition-colors"
+                                    title="Lihat Semua Jawaban">
+                                    <Icons.List size={20} />
+                                </button>
+
+                                <button
+                                    onClick={() => idx < questions.length - 1 ? setIdx(idx + 1) : setShowReviewModal(true)}
+                                    disabled={rawAnswers[idx] === undefined}
+                                    className="flex items-center gap-2 px-6 py-2 bg-red-800 text-white rounded-xl font-bold hover:bg-red-900 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-red-900/20 transition-all">
+                                    {idx === questions.length - 1 ? 'Selesai' : 'Lanjut'} <Icons.ArrowRight size={18} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* MODAL REVIEW */}
+                        {showReviewModal && (
+                            <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                                <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-fade-in">
+                                    <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                                        <div>
+                                            <h2 className="text-xl font-extrabold text-red-900 flex items-center gap-2"><Icons.FileText /> Review Lembar Jawaban</h2>
+                                            <p className="text-xs text-gray-500 mt-1">Anda telah menjawab {rawAnswers.filter(a => a !== undefined).length} dari {questions.length} soal.</p>
+                                        </div>
+                                        <button onClick={() => setShowReviewModal(false)} className="p-2 bg-gray-200 text-gray-600 rounded-full hover:bg-red-100 hover:text-red-700 transition-colors"><Icons.X size={20} /></button>
+                                    </div>
+                                    <div className="p-6 overflow-y-auto flex-1 space-y-3 bg-gray-100">
+                                        {questions.map((q, i) => {
+                                            const answered = rawAnswers[i] !== undefined;
+                                            return (
+                                                <div key={i} onClick={() => { setIdx(i); setShowReviewModal(false); }} className={`p-4 border rounded-xl cursor-pointer transition-all hover:border-red-400 hover:shadow-md ${answered ? 'bg-white border-gray-200' : 'bg-red-50 border-red-200'}`}>
+                                                    <div className="flex justify-between items-start gap-4">
+                                                        <div className="flex-1">
+                                                            <div className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Soal {i + 1} â€¢ {q.dimensi}</div>
+                                                            <p className={`font-medium text-sm md:text-base ${answered ? 'text-gray-800' : 'text-red-900'}`}>{q.soal}</p>
+                                                        </div>
+                                                        <div className="shrink-0 text-right">
+                                                            {answered ? (
+                                                                <span className="text-xs font-bold text-white bg-green-600 px-3 py-1.5 rounded-full inline-block shadow-sm">
+                                                                    {labelMap[rawAnswers[i]]} ({rawAnswers[i]})
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-xs font-bold text-white bg-red-600 px-3 py-1.5 rounded-full inline-block shadow-sm animate-pulse">
+                                                                    Belum Dijawab
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="p-6 border-t border-gray-200 bg-white flex justify-between items-center shadow-[0_-10px_30px_rgba(0,0,0,0.05)] z-10 relative">
+                                        <button onClick={() => setShowReviewModal(false)} className="px-6 py-2.5 rounded-xl text-gray-600 font-bold hover:bg-gray-100 transition-colors flex items-center gap-2">Tutup & Lanjut Kuis</button>
+                                        <button
+                                            onClick={() => { setShowReviewModal(false); setStep('result'); }}
+                                            disabled={rawAnswers.filter(a => a !== undefined).length < questions.length}
+                                            className="px-6 py-2.5 bg-red-800 text-white rounded-xl font-bold hover:bg-red-900 transition-colors shadow-lg shadow-red-900/30 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                            Kirim & Lihat Hasil <Icons.Check size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            }
+
+            if (step === 'result') {
+                // 1. NGASAL DETECTION â€” berbasis pola (selaras dengan ScoringService.php)
+                const scoreCounts = {};
+                rawAnswers.forEach(a => { scoreCounts[a] = (scoreCounts[a] || 0) + 1; });
+                const n = rawAnswers.length;
+                const neutralRate = (scoreCounts[3] || 0) / n;
+                const extremeRate = ((scoreCounts[1] || 0) + (scoreCounts[5] || 0)) / n;
+                const agreeRate = ((scoreCounts[4] || 0) + (scoreCounts[5] || 0)) / n;
+                const uniqueVals = new Set(rawAnswers).size;
+                const isNgasal = neutralRate >= 0.70 || extremeRate >= 0.85 || agreeRate >= 0.95 || uniqueVals <= 1;
+
+                // 2. DYNAMIC NORMALIZATION (Fixed â€” selaras dengan ScoringService.php)
+                let dimensionAvgs = {};
+                Object.keys(scores).forEach(dim => dimensionAvgs[dim] = scores[dim] / counts[dim]);
+                Object.keys(DIMENSION_MAP).forEach(dim => { if (!dimensionAvgs[dim]) dimensionAvgs[dim] = 0; });
+
+                let normalizedUser = {};
+                Object.keys(dimensionAvgs).forEach(dim => {
+                    // Normalisasi tetap: skala 1-5 ke 0.0-1.0 (identik dengan ScoringService.php L54)
+                    normalizedUser[dim] = dimensionAvgs[dim] > 0 ? (dimensionAvgs[dim] - 1) / 4 : 0.5;
+                });
+
+                // 3. SPK MATCHING (Hybrid PM + SAW)
+                const professionMatches = PROFESSIONS.map(p => {
+                    let totalScore = 0;
+                    const WEIGHTS = { trait: 0.2, riasec: 0.4, work_values: 0.2, environment: 0.2 };
+                    for (let group in WEIGHTS) {
+                        let groupScore = 0;
+                        let groupCount = 0;
+                        Object.entries(DIMENSION_MAP).filter(([_, v]) => v.group === group).forEach(([dim, v]) => {
+                            let userVal = normalizedUser[dim];
+                            let targetVal = p[group][v.index];
+                            groupScore += (1 - Math.abs(userVal - targetVal));
+                            groupCount++;
+                        });
+                        totalScore += (groupScore / groupCount) * WEIGHTS[group];
+                    }
+                    return { ...p, match: totalScore * 100 };
+                }).sort((a, b) => b.match - a.match);
+
+                // 4. PREPARE RIASEC CHART DATA
+                const riasecKeys = [{ k: 'R', dim: 'Realistic' }, { k: 'I', dim: 'Investigative' }, { k: 'A', dim: 'Artistic' }, { k: 'S', dim: 'Social' }, { k: 'E', dim: 'Enterprising' }, { k: 'C', dim: 'Conventional' }];
+                const riasecScores = riasecKeys.map(item => ({ k: item.k, v: normalizedUser[item.dim] })).sort((a, b) => b.v - a.v);
+                const primaryRiasec = riasecScores[0]?.k || 'R';
+                const secondaryRiasec = riasecScores[1]?.k || 'I';
+                const data = CATEGORIES[primaryRiasec];
+                const analysisText = generateAnalysis(primaryRiasec, secondaryRiasec);
+
+                return (
+                    <div className="max-w-4xl mx-auto mt-6">
+                        <FeedbackModal
+                            isOpen={showFeedbackModal}
+                            onClose={() => { setShowFeedbackModal(false); setPendingPrint(false); }}
+                            userName={user.name}
+                            mode={mode}
+                            onSubmitSuccess={() => {
+                                localStorage.setItem('EduTalent_has_reviewed', 'true');
+                                if (pendingPrint) {
+                                    handlePrint();
+                                    setPendingPrint(false);
+                                }
+                            }}
+                        />
+                        <div className="flex justify-between items-center mb-6 no-print">
+                            <button onClick={onBack} className="text-white hover:text-yellow-400 flex items-center gap-1 font-semibold drop-shadow-md"><Icons.ArrowLeft size={18} /> Menu Utama</button>
+                            <div className="flex gap-2">
+                                <button onClick={() => setShowFeedbackModal(true)} className="bg-white/20 hover:bg-white/40 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg backdrop-blur transition-all"><Icons.MessageSquare size={18} /> Review</button>
+                                <button onClick={handlePrintClick} disabled={isPrinting} className="bg-yellow-500 hover:bg-yellow-600 text-red-900 px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg transition-all disabled:opacity-50">
+                                    {isPrinting ? <span className="animate-pulse">Sedang Memproses PDF...</span> : <><Icons.Printer size={18} /> Download / Cetak PDF</>}
+                                </button>
+                            </div>
+                        </div>
+                        <div id="printable-result" className="bg-white p-10 rounded-xl shadow-xl print:shadow-none print:p-0 border border-gray-200 print:border-none print:w-full print-area">
+                            <div className="text-center border-b-2 border-red-800 pb-6 mb-8 flex flex-col items-center">
+                                <img src="./gambar/logouti.png" className="h-16 mb-4 print:block" alt="Logo  UTI" />
+                                <h1 className="text-3xl font-extrabold text-red-900 uppercase tracking-wider">Laporan Hasil Asesmen Karakter</h1>
+                                <p className="text-gray-500 mt-2">Universitas Teknokrat Indonesia - Sistem Informasi EduTalentAsesmen</p>
+                            </div>
+
+                            {isNgasal && (
+                                <div className="mb-6 p-4 bg-orange-100 border-l-4 border-orange-500 text-orange-800 rounded-r-lg">
+                                    <p className="font-bold flex items-center gap-2"><Icons.Info size={18} /> Peringatan Deteksi Sistem</p>
+                                    <p className="text-sm mt-1">Sistem mendeteksi pola jawaban Anda sangat seragam (kurang variatif). Hasil asesmen ini mungkin kurang akurat. Disarankan untuk mengisi ulang dengan lebih teliti.</p>
+                                </div>
+                            )}
+
+                            <div className="flex justify-between mb-8 bg-gray-50 p-4 rounded-lg print:bg-transparent print:p-0 print:mb-6"><div><p className="text-xs text-gray-500 uppercase font-bold">Nama Mahasiswa / Siswa</p><p className="text-lg font-bold text-gray-900">{user.name}</p></div><div className="text-right"><p className="text-xs text-gray-500 uppercase font-bold">Tanggal Tes</p><p className="text-lg font-bold text-gray-900">{user.date}</p></div></div>
+
+                            <div className="mb-8 p-6 bg-red-50 rounded-xl border border-red-100 print:bg-gray-50 print:border-gray-200"><h3 className="text-sm font-bold text-red-800 uppercase mb-3 flex items-center gap-2"><Icons.Info size={16} /> Analisis Personal</h3><p className="text-gray-800 leading-relaxed whitespace-pre-line text-sm md:text-base">{analysisText}</p></div>
+
+                            <div className="mb-8 p-6 bg-yellow-50 rounded-xl border border-yellow-200">
+                                <h3 className="text-sm font-bold text-yellow-800 uppercase mb-4 flex items-center gap-2"><Icons.TrendingUp size={18} /> Pemetaan Karir & Akademik (Hybrid PM+SAW)</h3>
+
+                                <div className="space-y-6">
+                                    {professionMatches.slice(0, 3).map((prof, i) => (
+                                        <div key={i} className="bg-white p-5 rounded-xl shadow-md border border-yellow-200 flex flex-col gap-4 relative overflow-hidden">
+                                            {i === 0 && <div className="absolute top-0 right-0 bg-red-800 text-white text-[10px] px-3 py-1 font-bold rounded-bl-lg">TOP REKOMENDASI</div>}
+
+                                            {/* LAYER 1: BIDANG */}
+                                            <div className="border-b pb-3">
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Layer 1: Bidang Karier</p>
+                                                <h4 className="font-extrabold text-red-900 text-xl">{prof.domain}</h4>
+                                                <div className="flex items-center gap-2 mt-2">
+                                                    <div className="w-full bg-gray-200 rounded-full h-2 flex-1"><div className="bg-yellow-500 h-2 rounded-full" style={{ width: `${prof.match}%` }}></div></div>
+                                                    <span className="text-xs font-bold text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded">{prof.match.toFixed(1)}% Match</span>
+                                                </div>
+                                            </div>
+
+                                            {/* LAYER 2: JALUR AKADEMIK */}
+                                            {prof.akademik && (
+                                                <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-100/50">
+                                                    <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-2">Layer 2: Rekomendasi Jalur Akademik</p>
+                                                    <div className="flex flex-col gap-3 text-sm">
+                                                        <div>
+                                                            <p className="font-bold text-blue-900 flex items-center gap-1"><Icons.BookOpen size={14} /> SMA / SMK</p>
+                                                            <p className="text-gray-600">{prof.akademik.sma}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-blue-900 flex items-center gap-1 mb-2"><Icons.Target size={14} /> Rekomendasi Program Studi Kuliah</p>
+                                                            <div className="flex flex-col gap-2">
+                                                                {(() => {
+                                                                    const utiKeywords = ["informatika", "sistem informasi", "teknik elektro", "teknik komputer", "sipil", "teknologi informasi", "manajemen", "akuntansi", "sastra inggris", "pendidikan bahasa inggris", "pendidikan matematika", "pendidikan olahraga"];
+                                                                    const prodis = prof.akademik.kuliah.split('/').map(p => p.trim());
+                                                                    const uti = prodis.filter(p => utiKeywords.some(kw => p.toLowerCase().includes(kw)));
+                                                                    const nonUti = prodis.filter(p => !uti.includes(p));
+
+                                                                    return (
+                                                                        <>
+                                                                            {uti.length > 0 && (
+                                                                                <div className="bg-white p-3 rounded-lg border border-yellow-200 shadow-sm">
+                                                                                    <span className="text-[10px] bg-red-100 text-red-800 px-2 py-0.5 rounded font-bold border border-red-200 inline-block mb-2">Tersedia di Universitas Teknokrat Indonesia</span>
+                                                                                    <div className="flex flex-wrap gap-2">
+                                                                                        {uti.map((p, idx) => <span key={idx} className="bg-yellow-100 text-yellow-800 border border-yellow-300 text-xs px-3 py-1.5 rounded-md shadow-sm font-extrabold flex items-center gap-1">{p} <Icons.Check size={12} className="text-yellow-600" /></span>)}
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                            {nonUti.length > 0 && (
+                                                                                <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                                                                    <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-bold border border-gray-200 inline-block mb-2">Program Studi Umum Lainnya</span>
+                                                                                    <div className="flex flex-wrap gap-2">
+                                                                                        {nonUti.map((p, idx) => <span key={idx} className="bg-gray-50 border border-gray-200 text-gray-600 text-xs px-3 py-1.5 rounded-md">{p}</span>)}
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                        </>
+                                                                    );
+                                                                })()}
+                                                            </div>
+                                                        </div>
+                                                        <div className="mt-1 pt-2 border-t border-blue-100 border-dashed">
+                                                            <p className="text-xs text-gray-500">Ekosistem UTI yang disarankan: <span className="font-medium text-blue-800">{prof.akademik.ukm_coe}</span></p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* LAYER 3: PROFESI */}
+                                            <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Layer 3: Target Profesi Utama</p>
+                                                <h5 className="font-bold text-gray-800 text-lg flex items-center gap-2"><Icons.Briefcase size={16} className="text-red-700" /> {prof.name}</h5>
+                                            </div>
+
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                                <div className={`p-6 rounded-xl border-l-8 border-red-800 bg-gray-50 print:bg-white print:border text-left`}><h3 className="text-xs font-bold text-gray-500 uppercase mb-1">Tipe Dominan (RIASEC)</h3><h2 className="text-3xl font-extrabold text-red-900 mb-2">{data.label}</h2><p className="text-sm text-gray-700">"{data.desc}"</p></div>
+                                <div><h3 className="font-bold text-gray-800 mb-3 text-sm uppercase">Peta Kekuatan Minat</h3><div className="space-y-2">{riasecScores.map((s) => (<div key={s.k} className="flex items-center gap-3 text-xs"><span className="w-6 font-bold text-gray-600">{s.k}</span><div className="flex-1 bg-gray-200 h-3 rounded-full overflow-hidden print:border print:bg-white"><div className={`h-full bg-red-800 print:bg-gray-800`} style={{ width: `${s.v * 100}%`, minWidth: '5px' }}></div></div></div>))}</div></div>
+                            </div>
+                            <div className="mb-8 mt-8 pt-8 border-t border-gray-200"><h3 className="font-bold text-gray-800 mb-4 text-center">Kamus Kode Minat (Edukasi)</h3><div className="grid grid-cols-2 md:grid-cols-3 gap-3">{Object.entries(CATEGORIES).map(([key, cat]) => (<div key={key} className="text-xs border p-2 rounded bg-gray-50 print:bg-white"><span className="font-bold text-red-900">{key} - {cat.label.split('(')[0]}</span><p className="text-gray-600 mt-1 leading-tight">{cat.desc}</p></div>))}</div></div>
+                            <div className="mt-10 text-center text-xs text-gray-400 print:text-gray-500"><p>Dikembangkan oleh Rakhmat Dedi G & Team</p><p className="mt-1">Sebagai alat bantu keputusan, bukan penentu mutlak masa depan.</p></div>
+                        </div>
+                    </div>
+                );
+            }
+        };
+
+        const VariantExplorer = ({ onBack }) => {
+            const [filters, setFilters] = useState({ riasec: [], trait: [], env: [] });
+
+            const traitOptions = ["Openness", "Conscientiousness", "Extraversion", "Agreeableness", "Emotional Stability"];
+            const envOptions = ["Teknis", "Komunikasi", "Mandiri", "Kolaboratif", "Statis", "Dinamis", "Low Pressure", "High Pressure", "Formal", "Santai", "Indoor", "Outdoor"];
+
+            const riasecDimMap = { R: "Realistic", I: "Investigative", A: "Artistic", S: "Social", E: "Enterprising", C: "Conventional" };
+            const envDimIndex = { "Teknis": 0, "Komunikasi": 0, "Mandiri": 1, "Kolaboratif": 1, "Statis": 2, "Dinamis": 2, "Low Pressure": 3, "High Pressure": 3, "Formal": 4, "Santai": 4, "Indoor": 5, "Outdoor": 5 };
+            const envHighSide = { "Komunikasi": true, "Kolaboratif": true, "Dinamis": true, "High Pressure": true, "Santai": true, "Outdoor": true };
+
+            // Pasangan filter lingkungan yang berlawanan (bipolar) â€”
+            // memilih salah satu akan otomatis membatalkan pasangannya.
+            const envPairs = {
+                "Teknis": "Komunikasi", "Komunikasi": "Teknis",
+                "Mandiri": "Kolaboratif", "Kolaboratif": "Mandiri",
+                "Statis": "Dinamis", "Dinamis": "Statis",
+                "Low Pressure": "High Pressure", "High Pressure": "Low Pressure",
+                "Formal": "Santai", "Santai": "Formal",
+                "Indoor": "Outdoor", "Outdoor": "Indoor"
+            };
+
+            const handleFilterChange = (dim, val) => {
+                setFilters(prev => {
+                    const current = prev[dim];
+                    // Toggle off jika sudah aktif
+                    if (current.includes(val)) return { ...prev, [dim]: current.filter(x => x !== val) };
+                    // Hapus pasangan berlawanan (env bipolar conflict prevention)
+                    const opposite = dim === 'env' ? (envPairs[val] || null) : null;
+                    const withoutOpposite = opposite ? current.filter(x => x !== opposite) : current;
+                    if (withoutOpposite.length >= 3) return prev; // Max 3
+                    return { ...prev, [dim]: [...withoutOpposite, val] };
+                });
+            };
+
+            const groupedResults = useMemo(() => {
+                const hasAnyFilter = filters.riasec.length > 0 || filters.trait.length > 0 || filters.env.length > 0;
+
+                const scored = PROFESSIONS.map(p => {
+                    let score = 0, count = 0;
+                    filters.riasec.forEach(k => {
+                        const dim = riasecDimMap[k];
+                        const idx = DIMENSION_MAP[dim]?.index ?? 0;
+                        score += p.riasec[idx] ?? 0; count++;
+                    });
+                    filters.trait.forEach(t => {
+                        const idx = DIMENSION_MAP[t]?.index ?? 0;
+                        score += p.trait[idx] ?? 0; count++;
+                    });
+                    filters.env.forEach(e => {
+                        const idx = envDimIndex[e] ?? 0;
+                        const raw = p.environment[idx] ?? 0.5;
+                        score += envHighSide[e] ? raw : (1 - raw); count++;
+                    });
+                    return { ...p, match: hasAnyFilter ? (count > 0 ? (score / count) * 100 : 0) : 100 };
+                });
+
+                const filtered = hasAnyFilter ? scored.filter(p => p.match >= 50) : scored;
+                const groups = {};
+                filtered.forEach(p => {
+                    if (!groups[p.domain]) {
+                        groups[p.domain] = { domain: p.domain, prodis: new Set(), professions: [], maxMatch: 0, ukm_coe: new Set() };
+                    }
+                    const g = groups[p.domain];
+                    p.akademik.kuliah.split('/').forEach(s => g.prodis.add(s.trim()));
+                    g.professions.push(p.name);
+                    p.akademik.ukm_coe.split(',').forEach(s => g.ukm_coe.add(s.trim()));
+                    if (p.match > g.maxMatch) g.maxMatch = p.match;
+                });
+                return Object.values(groups).sort((a, b) => b.maxMatch - a.maxMatch);
+            }, [filters]);
+
+            return (
+                <div className="max-w-6xl mx-auto mt-6 p-6 bg-white/95 backdrop-blur rounded-2xl shadow-xl">
+                    <button onClick={onBack} className="mb-4 text-gray-500 hover:text-black flex items-center gap-1"><Icons.ArrowLeft size={16} /> Kembali ke Menu Utama</button>
+                    <div className="text-center mb-8">
+                        <h1 className="text-3xl font-bold mb-2 text-red-900">Eksplorasi Peta Karir</h1>
+                        <p className="text-gray-600">Pilih kombinasi domain karakter Anda (maks. 3 per kategori) untuk melihat bidang, prodi Teknokrat, dan daftar profesi yang sesuai.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                        {/* Kolom RIASEC */}
+                        <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 shadow-sm">
+                            <h3 className="font-bold text-gray-800 mb-4 text-sm uppercase flex justify-between items-center">
+                                1. Minat (RIASEC)
+                                <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{filters.riasec.length}/3</span>
+                            </h3>
+                            <div className="flex flex-col gap-2">
+                                {Object.entries(CATEGORIES).map(([k, cat]) => (
+                                    <button key={k} onClick={() => handleFilterChange('riasec', k)} className={`p-3 text-left text-xs rounded-xl border transition-all flex items-center justify-between ${filters.riasec.includes(k) ? 'bg-red-800 text-white border-red-800 shadow-md' : 'bg-white text-gray-700 hover:border-red-400'}`}>
+                                        <span><span className="font-bold mr-2">{k}</span> {cat.label.split(' ')[0]}</span>
+                                        {filters.riasec.includes(k) && <Icons.Check size={14} />}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Kolom Trait */}
+                        <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 shadow-sm">
+                            <h3 className="font-bold text-gray-800 mb-4 text-sm uppercase flex justify-between items-center">
+                                2. Karakter (Big 5)
+                                <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">{filters.trait.length}/3</span>
+                            </h3>
+                            <div className="flex flex-col gap-2">
+                                {traitOptions.map(t => (
+                                    <button key={t} onClick={() => handleFilterChange('trait', t)} className={`p-3 text-left text-xs rounded-xl border transition-all flex items-center justify-between ${filters.trait.includes(t) ? 'bg-yellow-600 text-white border-yellow-600 shadow-md' : 'bg-white text-gray-700 hover:border-yellow-400'}`}>
+                                        <span>{t}</span>
+                                        {filters.trait.includes(t) && <Icons.Check size={14} />}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Kolom Environment */}
+                        <div className="bg-gray-50 p-5 rounded-2xl border border-gray-200 shadow-sm">
+                            <h3 className="font-bold text-gray-800 mb-4 text-sm uppercase flex justify-between items-center">
+                                3. Lingkungan Kerja
+                                <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{filters.env.length}/3</span>
+                            </h3>
+                            <div className="flex flex-wrap gap-2">
+                                {envOptions.map(e => (
+                                    <button key={e} onClick={() => handleFilterChange('env', e)} className={`px-3 py-2 text-[10px] font-bold rounded-full border transition-all ${filters.env.includes(e) ? 'bg-blue-800 text-white border-blue-800 shadow-md' : 'bg-white text-gray-700 hover:border-blue-400'}`}>
+                                        {e}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-8">
+                        {groupedResults.length > 0 ? (
+                            groupedResults.map((group, i) => (
+                                <div key={i} className={`rounded-3xl border overflow-hidden transition-all shadow-sm hover:shadow-xl ${i === 0 ? 'bg-gradient-to-br from-red-50 to-white border-red-200' : 'bg-white border-gray-100'}`}>
+                                    <div className="grid grid-cols-1 lg:grid-cols-12">
+
+                                        {/* Layer 1: Bidang */}
+                                        <div className="lg:col-span-3 p-6 bg-red-900/5 flex flex-col justify-center border-r border-gray-100">
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Layer 1: Bidang</p>
+                                            <h4 className="font-extrabold text-red-900 text-xl leading-tight mb-4">{group.domain}</h4>
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex-1 bg-gray-200 rounded-full h-2"><div className="bg-yellow-500 h-2 rounded-full shadow-sm" style={{ width: `${group.maxMatch}%` }}></div></div>
+                                                <span className="text-xs font-black text-yellow-700">{Math.round(group.maxMatch)}%</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Layer 2: Akademik */}
+                                        <div className="lg:col-span-4 p-6 flex flex-col justify-center border-r border-gray-100">
+                                            <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mb-3">Layer 2: Jalur Akademik UTI</p>
+                                            <div className="space-y-4">
+                                                <div>
+                                                    <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Program Studi Relevan:</p>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {Array.from(group.prodis).map((prodi, idx) => {
+                                                            const utiKeywords = ["informatika", "sistem informasi", "teknik elektro", "teknik komputer", "sipil", "teknologi informasi", "manajemen", "akuntansi", "sastra inggris", "pendidikan bahasa inggris", "pendidikan matematika", "pendidikan olahraga"];
+                                                            const isUTI = utiKeywords.some(kw => prodi.toLowerCase().includes(kw));
+                                                            return (
+                                                                <span key={idx} className={isUTI ? "bg-yellow-100 text-yellow-800 text-[11px] px-3 py-1 rounded-lg border border-yellow-300 font-extrabold shadow-sm flex items-center gap-1" : "bg-blue-50 text-blue-800 text-[11px] px-3 py-1 rounded-lg border border-blue-100 font-bold"}>
+                                                                    {prodi} {isUTI && <Icons.Check size={10} className="text-yellow-600" />}
+                                                                </span>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">UKM / CoE Pendukung (UTI):</p>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {Array.from(group.ukm_coe)
+                                                            .filter(item => item.includes('UKM') || item.includes('CoE') || item.includes('Duta') || item.includes('KSR-PMI') || item.includes('Resimen'))
+                                                            .map((item, j) => (
+                                                                <span key={j} className="bg-green-50 text-green-700 text-[10px] px-2 py-0.5 rounded-lg border border-green-100 font-semibold">{item}</span>
+                                                            ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Layer 3: Profesi */}
+                                        <div className="lg:col-span-5 p-6 bg-gray-50/30">
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Layer 3: Daftar Profesi (Sebanyak-banyaknya)</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {group.professions.map((name, idx) => (
+                                                    <div key={idx} className="bg-white px-3 py-2 rounded-xl border border-gray-200 shadow-sm flex items-center gap-2 group hover:border-red-500 transition-colors">
+                                                        <Icons.Briefcase size={12} className="text-red-700" />
+                                                        <span className="text-xs font-bold text-gray-700">{name}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                        </div>
+
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="text-center p-16 bg-gray-50 rounded-[40px] border-4 border-dashed border-gray-200 text-gray-400">
+                                <Icons.Map size={60} className="mx-auto mb-4 opacity-10" />
+                                <h3 className="text-xl font-bold mb-2 text-gray-500">Tidak ada profesi yang cocok</h3>
+                                <p className="max-w-md mx-auto text-sm">Coba kurangi filter atau pilih kombinasi domain yang berbeda.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+        const FeedbackModal = ({ isOpen, onClose, userName, mode, onSubmitSuccess }) => {
+            const [ratings, setRatings] = useState({
+                kesesuaian: 0,
+                manfaat: 0,
+                kemudahan: 0
+            });
+            const [comment, setComment] = useState('');
+            const [submitted, setSubmitted] = useState(false);
+
+            if (!isOpen) return null;
+
+            const handleRating = (key, val) => {
+                setRatings(prev => ({ ...prev, [key]: val }));
+            };
+
+            const handleSubmit = () => {
+                if (ratings.kesesuaian === 0 || ratings.manfaat === 0 || ratings.kemudahan === 0) {
+                    return alert('Silakan berikan semua rating terlebih dahulu.');
+                }
+                // Simpan feedback ke localStorage (persisten meski tab ditutup)
+                try {
+                    const feedbackData = {
+                        timestamp: new Date().toISOString(),
+                        nama: userName || 'Anonim',
+                        ratings: { ...ratings },
+                        comment,
+                        source: mode || 'Unknown'
+                    };
+                    const existing = JSON.parse(localStorage.getItem('EduTalent_feedback_log') || '[]');
+                    existing.push(feedbackData);
+                    localStorage.setItem('EduTalent_feedback_log', JSON.stringify(existing));
+
+                    // Sync ke Google Sheet
+                    syncToGoogleSheet("review_aplikasi", feedbackData);
+                } catch (e) {
+                    // localStorage tidak tersedia (mode privat, dll.) â€” abaikan
+                }
+                setSubmitted(true);
+                setTimeout(() => {
+                    setSubmitted(false);
+                    onClose();
+                    if (onSubmitSuccess) onSubmitSuccess();
+                }, 1500);
+            };
+
+            const renderStars = (key, label) => (
+                <div className="mb-4">
+                    <p className="text-sm font-semibold text-gray-700 mb-2">{label}</p>
+                    <div className="flex gap-2">
+                        {[1, 2, 3, 4, 5].map(star => (
+                            <button
+                                key={star}
+                                onClick={() => handleRating(key, star)}
+                                className={`transition-all transform hover:scale-110 ${ratings[key] >= star ? 'text-yellow-500' : 'text-gray-200'}`}>
+                                <Icons.Star size={24} fill={ratings[key] >= star ? 'currentColor' : 'none'} />
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 backdrop-blur-md overflow-y-auto">
+                    <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden animate-fade-in my-8">
+                        {submitted ? (
+                            <div className="p-10 text-center">
+                                <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                                    <Icons.Check size={48} />
+                                </div>
+                                <h2 className="text-2xl font-bold text-gray-800 mb-2">Terima Kasih!</h2>
+                                <p className="text-gray-500">Feedback Anda sangat berarti bagi pengembangan EduTalent Asesmen.</p>
+                            </div>
+                        ) : (
+                            <div className="p-8">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-xl font-bold text-red-900 flex items-center gap-2">
+                                        <Icons.MessageSquare className="text-yellow-500" /> Review Aplikasi
+                                    </h2>
+                                    <button onClick={onClose} className="text-gray-400 hover:text-red-600"><Icons.X size={24} /></button>
+                                </div>
+
+                                <p className="text-gray-600 mb-6 text-sm">Bagaimana pengalaman Anda menggunakan EduTalent Asesmen hari ini? Masukan Anda membantu kami menjadi lebih baik.</p>
+
+                                <div className="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                    {renderStars('kesesuaian', '1. Seberapa sesuai hasil asesmen dengan kenyataan diri Anda?')}
+                                    {renderStars('manfaat', '2. Seberapa bermanfaat aplikasi ini bagi Anda?')}
+                                    {renderStars('kemudahan', '3. Seberapa mudah aplikasi ini digunakan?')}
+                                </div>
+
+                                <div className="mb-6">
+                                    <p className="text-sm font-semibold text-gray-700 mb-2">4. Saran dan Kritik</p>
+                                    <textarea
+                                        className="w-full p-4 border border-gray-200 rounded-2xl bg-gray-50 text-sm focus:ring-2 focus:ring-red-800 outline-none min-h-[100px]"
+                                        placeholder="Tuliskan saran atau pengalaman Anda di sini..."
+                                        value={comment}
+                                        onChange={(e) => setComment(e.target.value)}
+                                    ></textarea>
+                                </div>
+
+                                <button
+                                    onClick={handleSubmit}
+                                    className="w-full bg-red-800 text-white py-4 rounded-2xl font-bold hover:bg-red-900 transition-all shadow-lg shadow-red-900/20">
+                                    Kirim Review
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [variant, setVariant] = useState('menu');
+            const [showGlobalReview, setShowGlobalReview] = useState(false);
+
+            if (variant === 'trial') return <div className="min-h-screen bg-cover bg-center bg-fixed" style={{ backgroundImage: "url('./gambar/Gedung Utama UTI.jpeg')" }}><div className="min-h-screen bg-black/60 pb-10"><VariantAssessment mode="trial" onBack={() => setVariant('menu')} /></div></div>;
+            if (variant === 'cepat') return <div className="min-h-screen bg-cover bg-center bg-fixed" style={{ backgroundImage: "url('./gambar/Gedung Utama UTI.jpeg')" }}><div className="min-h-screen bg-black/60 pb-10"><VariantAssessment mode="cepat" onBack={() => setVariant('menu')} /></div></div>;
+            if (variant === 'lengkap') return <div className="min-h-screen bg-cover bg-center bg-fixed" style={{ backgroundImage: "url('./gambar/Gedung Utama UTI.jpeg')" }}><div className="min-h-screen bg-black/60 pb-10"><VariantAssessment mode="lengkap" onBack={() => setVariant('menu')} /></div></div>;
+            if (variant === 'explorer') return <div className="min-h-screen bg-cover bg-center bg-fixed" style={{ backgroundImage: "url('./gambar/Gedung Utama UTI.jpeg')" }}><div className="min-h-screen bg-black/60 pb-10"><VariantExplorer onBack={() => setVariant('menu')} /></div></div>;
+
+            return (
+                <div className="min-h-screen bg-cover bg-center bg-fixed font-sans" style={{ backgroundImage: "url('./gambar/Gedung Utama UTI.jpeg')" }}>
+                    <div className="min-h-screen bg-black/60 p-6 flex flex-col">
+
+                        <FeedbackModal isOpen={showGlobalReview} onClose={() => setShowGlobalReview(false)} />
+
+                        {/* Header UTI */}
+                        <header className="flex items-center justify-between bg-white/10 backdrop-blur-md p-4 rounded-2xl mb-10 max-w-6xl mx-auto w-full border border-white/20 shadow-lg">
+                            <div className="flex items-center gap-4">
+                                <img src="gambar/logouti.png" alt="Logo UTI" className="h-16 bg-white p-1 rounded-lg" />
+                                <div className="text-white">
+                                    <h1 className="text-2xl font-bold text-yellow-400 drop-shadow-md">Universitas Teknokrat Indonesia</h1>
+                                    <p className="text-sm opacity-90">EduTalent Asesmen - Sistem Asesmen Mandiri Minat dan Karakter</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowGlobalReview(true)}
+                                className="bg-white/20 hover:bg-yellow-500 text-white p-3 rounded-xl transition-all border border-white/30 group">
+                                <Icons.MessageSquare className="group-hover:scale-110 transition-transform" />
+                            </button>
+                        </header>
+
+                        <div className="max-w-6xl mx-auto mb-10 text-center">
+                            <h2 className="text-4xl font-extrabold text-white mb-4 drop-shadow-lg">Pilih Mode Asesmen</h2>
+                            <p className="text-gray-300 text-lg">Kenali potensi diri Anda melalui instrumen yang teruji secara ilmiah.</p>
+                        </div>
+
+                        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <div onClick={() => setVariant('trial')} className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl hover:-translate-y-2 transition-all cursor-pointer border-t-4 border-yellow-500 group flex flex-col h-full">
+                                <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center mb-4 text-yellow-600 group-hover:bg-yellow-500 group-hover:text-white transition-colors"><Icons.Target size={24} /></div>
+                                <h2 className="text-lg font-bold text-red-900 mb-2">Mode Trial</h2>
+                                <p className="text-sm text-gray-500 leading-relaxed mb-4 flex-1">20 Pertanyaan. Estimasi waktu: 3-5 menit. Coba sekilas bagaimana asesmen ini bekerja.</p>
+                                <span className="text-yellow-600 font-bold text-xs flex items-center gap-1">Mulai Trial <Icons.ArrowRight size={12} /></span>
+                            </div>
+
+                            <div onClick={() => setVariant('cepat')} className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl hover:-translate-y-2 transition-all cursor-pointer border-t-4 border-orange-500 group flex flex-col h-full">
+                                <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center mb-4 text-orange-600 group-hover:bg-orange-500 group-hover:text-white transition-colors"><Icons.RefreshCcw size={24} /></div>
+                                <h2 className="text-lg font-bold text-red-900 mb-2">Mode Cepat</h2>
+                                <p className="text-sm text-gray-500 leading-relaxed mb-4 flex-1">40 Pertanyaan. Estimasi waktu: 5-10 menit. Hasil representatif dalam waktu yang singkat.</p>
+                                <span className="text-orange-600 font-bold text-xs flex items-center gap-1">Mulai Tes Cepat <Icons.ArrowRight size={12} /></span>
+                            </div>
+
+                            <div onClick={() => setVariant('lengkap')} className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl hover:-translate-y-2 transition-all cursor-pointer border-t-4 border-red-700 group flex flex-col h-full relative overflow-hidden">
+                                <div className="absolute top-3 right-3 bg-red-700 text-white text-[10px] px-2 py-0.5 rounded-full font-bold animate-pulse shadow-sm">REKOMENDASI</div>
+                                <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center mb-4 text-red-700 group-hover:bg-red-700 group-hover:text-white transition-colors"><Icons.FileText size={24} /></div>
+                                <h2 className="text-lg font-bold text-red-900 mb-2">Mode Lengkap</h2>
+                                <p className="text-sm text-gray-500 leading-relaxed mb-4 flex-1">176 Pertanyaan. Estimasi waktu: 15-25 menit. Analisis komprehensif, akurat, dan cetak PDF.</p>
+                                <span className="text-red-700 font-bold text-xs flex items-center gap-1">Mulai Tes Lengkap <Icons.ArrowRight size={12} /></span>
+                            </div>
+
+                            <div onClick={() => setVariant('explorer')} className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-xl hover:-translate-y-2 transition-all cursor-pointer border-t-4 border-blue-600 group flex flex-col h-full">
+                                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors"><Icons.Map size={24} /></div>
+                                <h2 className="text-lg font-bold text-red-900 mb-2">Peta Karir</h2>
+                                <p className="text-sm text-gray-500 leading-relaxed mb-4 flex-1">Eksplorasi database profesi, skill, dan estimasi penghasilan modern.</p>
+                                <span className="text-blue-600 font-bold text-xs flex items-center gap-1">Jelajahi Karir <Icons.ArrowRight size={12} /></span>
+                            </div>
+                        </div>
+
+                        <div className="mt-auto pt-10 text-center text-sm text-gray-400">
+                            <p>&copy; 2026 Universitas Teknokrat Indonesia</p>
+                            <p className="mt-1">EduTalentAsesmen by Rakhmat Dedi G & Team</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
