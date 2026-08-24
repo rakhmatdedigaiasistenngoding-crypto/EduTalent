@@ -82,6 +82,7 @@
         );
 
         const Icons = {
+              User: (p) => <Icon {...p} d={<><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>} />,
             Briefcase: (p) => <Icon {...p} d={<><rect width="20" height="14" x="2" y="7" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></>} />,
             BookOpen: (p) => <Icon {...p} d={<><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></>} />,
             Camera: (p) => <Icon {...p} d={<><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" /></>} />,
@@ -512,15 +513,36 @@
 
         // --- SUB COMPONENTS ---
 
-        const generateAnalysis = (primary, secondary) => {
-            const primaryData = CATEGORIES[primary];
-            const secondaryData = CATEGORIES[secondary];
-            return `Berdasarkan hasil asesmen, kamu memiliki pola minat yang unik. Kekuatan terbesarmu ada pada tipe **${primaryData.label}**. \nIni berarti kamu cenderung memiliki energi alami saat ${primaryData.desc.toLowerCase()} \n\nNamun, kamu tidak hanya satu dimensi. Kamu juga memiliki sisi **${secondaryData.label}** yang cukup kuat. \nKombinasi ini menarik karena kamu bisa menyeimbangkan antara fokus utama dengan kemampuan pendukung dari tipe kedua.\n\n**Saran Pengambilan Keputusan:**\nJangan merasa tertekan untuk memilih satu jalur yang "sempurna". Gunakan hasil ini sebagai kompas. \nJika kamu memilih lanjut kuliah atau bekerja, carilah lingkungan yang menghargai kemampuanmu dalam ${primaryData.desc.split(',')[0].toLowerCase()}. \nHasil ini bukan vonis, melainkan cermin potensi yang bisa kamu asah lebih jauh.`;
-        };
+        const generateAnalysis = (primary, secondary, topProfession = "Profesional", topDomain = "Umum") => {
+    const primaryData = CATEGORIES[primary];
+    const secondaryData = CATEGORIES[secondary];
+    const templates = [
+        `Berdasarkan hasil pemetaan sistem, kamu memiliki kecenderungan energi dan minat dominan pada tipe **${primaryData.label}**. Secara praktis, ini berarti kamu sangat menikmati ${primaryData.desc.toLowerCase()}.
+
+Di sisi lain, karakter **${secondaryData.label}** mu juga cukup menonjol. Perpaduan antara tipe dominan dan sekunder ini menciptakan profil yang sangat unik. Kamu tidak hanya mengandalkan satu keahlian, tetapi bisa memadukan pendekatan utama tersebut dengan sudut pandang dari tipe pendukung ini.
+
+**Hubungan dengan Karier:**
+Sistem algoritma kami melihat bahwa pola karaktermu sangat selaras dengan bidang **${topDomain}**, khususnya jika diarahkan ke profesi seperti **${topProfession}**. Karier ini membutuhkan perpaduan tepat antara minat utama kamu dan kemampuan adaptasimu. Gunakan wawasan ini untuk mulai berfokus pada kegiatan jurusan di sekolah yang relevan dengan jalur tersebut.`,
+        `Hasil asesmen menunjukkan bahwa kamu adalah seorang **${primaryData.label}** sejati. Orang dengan profil ini memiliki dorongan alami saat ${primaryData.desc.toLowerCase()}.
+
+Sebagai pelengkap yang kuat, sisi **${secondaryData.label}** mu turut mewarnai cara kamu bekerja dan memecahkan masalah. Kombinasi kedua elemen ini menjadikanmu lebih adaptif dibanding mereka yang hanya terpaku pada satu gaya saja.
+
+**Mengapa ini penting?**
+Profil kepribadianmu sangat cocok dengan dinamika kerja di bidang **${topDomain}**. Sebagai contoh, peran sebagai **${topProfession}** akan sangat menghargai kemampuanmu dalam memadukan kedua tipe karakter tersebut. Jadikan hasil ini sebagai pijakan awal untuk memperdalam keahlian di sekolah vokasi/SMK saat ini.`,
+        `Karakteristik utama kamu mengarah kuat pada tipe **${primaryData.label}**, yang menunjukkan bahwa kamu merasa paling nyaman dan produktif saat ${primaryData.desc.toLowerCase()}.
+
+Menariknya, kamu juga didukung oleh elemen **${secondaryData.label}**. Sinergi antara dua kepribadian ini memberimu keuntungan khusus dalam berkolaborasi dan menyelesaikan tugas-tugas yang membutuhkan pendekatan multi-dimensi.
+
+**Rekomendasi Strategis:**
+Berdasarkan kecocokan data matematis, kamu memiliki potensi besar untuk bersinar di bidang **${topDomain}**, terutama jika kamu membidik target karier seperti **${topProfession}**. Lingkungan kerja di bidang ini akan sangat memfasilitasi karakter dominanmu untuk terus berkembang secara profesional.`
+    ];
+    const tIndex = topProfession ? topProfession.charCodeAt(0) % templates.length : 0;
+    return templates[tIndex];
+};
 
         const VariantAssessment = ({ mode, onBack }) => {
             const [step, setStep] = useState('identity');
-            const [user, setUser] = useState({ name: '', date: '' });
+            const [user, setUser] = useState({ name: '', nis: '', date: '' });
             const [scores, setScores] = useState({});
             const [counts, setCounts] = useState({});
             const [rawAnswers, setRawAnswers] = useState([]);
@@ -543,7 +565,7 @@
             const handleStartQuiz = (e) => {
                 e.preventDefault();
                 if (user.name.trim()) {
-                    syncToGoogleSheet("mulai_asesmen", { nama: user.name, tanggal: user.date, mode: mode });
+                    syncToGoogleSheet("mulai_asesmen", { nama: user.name, nis: user.nis, tanggal: user.date, mode: mode });
                     setStep('quiz');
                 }
             };
@@ -615,15 +637,25 @@
             };
 
             if (step === 'identity') return (
-                <div className="max-w-xl w-full mx-auto bg-white rounded-2xl shadow-xl p-8 mt-10 border-t-8 border-blue-800">
-                    <button onClick={onBack} className="text-gray-400 hover:text-gray-600 mb-6 flex items-center gap-1"><Icons.ArrowLeft size={16} /> Menu Utama</button>
-                    <div className="text-center mb-8"><div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 text-yellow-600"><Icons.FileText size={32} /></div><h1 className="text-2xl font-bold text-blue-900">Asesmen Karakter: Mode {mode.charAt(0).toUpperCase() + mode.slice(1)}</h1><p className="text-gray-500">Terdapat {questions.length} pertanyaan pada sesi ini.</p></div>
+                <div className="flex flex-col items-center justify-between min-h-[90vh]">
+                    <div className="max-w-xl w-full mx-auto bg-white rounded-2xl shadow-xl p-8 mt-10 border-t-8 border-blue-600">
+                    <div className="flex items-center justify-center gap-3 mb-6">
+                          <img src="header_logos.png" alt="Logos" className="h-8 md:h-10 object-contain" />
+                      </div>
+                      <button onClick={onBack} className="text-gray-400 hover:text-gray-600 mb-6 flex items-center gap-1"><Icons.ArrowLeft size={16} /> Menu Utama</button>
+                    <div className="text-center mb-8"><div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600"><Icons.FileText size={32} /></div><h1 className="text-2xl font-bold text-blue-900">Asesmen Karakter: Mode {mode.charAt(0).toUpperCase() + mode.slice(1)}</h1><p className="text-gray-500">Terdapat {questions.length} pertanyaan pada sesi ini.</p></div>
                     <form onSubmit={handleStartQuiz} className="space-y-4">
-                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap Mahasiswa / Siswa</label><input required type="text" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-800 outline-none" placeholder="Masukkan nama Anda..." value={user.name} onChange={(e) => setUser({ ...user, name: e.target.value })} /></div>
+                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap Siswa</label><input required type="text" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none" placeholder="Masukkan nama Anda..." value={user.name} onChange={(e) => setUser({ ...user, name: e.target.value })} /></div>
+                          <div><label className="block text-sm font-medium text-gray-700 mb-1">NIS (Nomor Induk Siswa)</label><input required type="text" inputMode="numeric" maxLength="10" onInput={(e) => e.target.value = e.target.value.replace(/[^0-9]/g, '')} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none" placeholder="Masukkan NIS (Maks. 10 Angka)..." value={user.nis} onChange={(e) => setUser({ ...user, nis: e.target.value })} /></div>
                         <div><label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Asesmen</label><input disabled type="text" className="w-full p-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-500" value={user.date} /></div>
-                        <button type="submit" className="w-full bg-red-800 text-white py-3 rounded-lg font-bold hover:bg-red-900 transition-colors">Lanjut ke Soal</button>
+                        <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 shadow-md transition-colors">Lanjut ke Soal</button>
                     </form>
                 </div>
+                  <div className="mt-10 text-center text-sm text-gray-500">
+                      <p>&copy; 2026 SMK Budi Karya Natar</p>
+                      <p className="mt-1">EduTalent Asesmen by Rakhmat Dedi G & Team</p>
+                  </div>
+              </div>
             );
 
             if (step === 'quiz') {
@@ -635,7 +667,14 @@
                 return (
                     <div className="max-w-2xl mx-auto mt-10 relative">
                         {/* KOTAK KUIS */}
-                        <div className="bg-white rounded-2xl shadow-lg p-8 border-t-8 border-blue-800 relative z-10">
+                        <div className="flex justify-center mb-6">
+                              <div className="bg-white/90 backdrop-blur rounded-full px-6 py-2 shadow-sm border border-blue-100 flex items-center gap-4 text-sm font-semibold text-blue-900">
+                                  <span><Icons.User size={14} className="inline mr-1 text-blue-500"/> {user.name}</span>
+                                  <span className="text-gray-300">|</span>
+                                  <span>NIS: {user.nis || '-'}</span>
+                              </div>
+                          </div>
+                          <div className="bg-white rounded-2xl shadow-lg p-8 border-t-8 border-blue-800 relative z-10">
                             <div className="flex justify-between text-sm text-gray-500 mb-2"><span>Soal {idx + 1} dari {questions.length}</span><span>{Math.round(progress)}%</span></div>
                             <div className="w-full bg-gray-200 rounded-full h-2 mb-8"><div className="bg-red-800 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div></div>
                             <h2 className="text-xl md:text-2xl font-bold text-center mb-8 text-gray-800 leading-relaxed">"{q.soal}"</h2>
@@ -692,7 +731,7 @@
                                                 <div key={i} onClick={() => { setIdx(i); setShowReviewModal(false); }} className={`p-4 border rounded-xl cursor-pointer transition-all hover:border-red-400 hover:shadow-md ${answered ? 'bg-white border-gray-200' : 'bg-red-50 border-blue-200'}`}>
                                                     <div className="flex justify-between items-start gap-4">
                                                         <div className="flex-1">
-                                                            <div className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Soal {i + 1} â€¢ {q.dimensi}</div>
+                                                            <div className="text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Soal {i + 1} &bull; {q.dimensi}</div>
                                                             <p className={`font-medium text-sm md:text-base ${answered ? 'text-gray-800' : 'text-blue-900'}`}>{q.soal}</p>
                                                         </div>
                                                         <div className="shrink-0 text-right">
@@ -773,7 +812,7 @@
                 const primaryRiasec = riasecScores[0]?.k || 'R';
                 const secondaryRiasec = riasecScores[1]?.k || 'I';
                 const data = CATEGORIES[primaryRiasec];
-                const analysisText = generateAnalysis(primaryRiasec, secondaryRiasec);
+                const analysisText = generateAnalysis(primaryRiasec, secondaryRiasec, professionMatches[0]?.name, professionMatches[0]?.domain);
 
                 return (
                     <div className="max-w-4xl mx-auto mt-6">
@@ -791,9 +830,9 @@
                             }}
                         />
                         <div className="flex justify-between items-center mb-6 no-print">
-                            <button onClick={onBack} className="text-white hover:text-yellow-400 flex items-center gap-1 font-semibold drop-shadow-md"><Icons.ArrowLeft size={18} /> Menu Utama</button>
-                            <div className="flex gap-2">
-                                <button onClick={() => setShowFeedbackModal(true)} className="bg-white/20 hover:bg-white/40 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg backdrop-blur transition-all"><Icons.MessageSquare size={18} /> Review</button>
+                              <button onClick={onBack} className="text-blue-900 hover:text-blue-700 flex items-center gap-1 font-semibold"><Icons.ArrowLeft size={18} /> Menu Utama</button>
+                              <div className="flex gap-2">
+                                  <button onClick={() => setShowFeedbackModal(true)} className="bg-white hover:bg-blue-50 text-blue-800 px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition-all border border-blue-200"><Icons.MessageSquare size={18} /> Review</button>
                                 <button onClick={handlePrintClick} disabled={isPrinting} className="bg-yellow-500 hover:bg-yellow-600 text-blue-900 px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg transition-all disabled:opacity-50">
                                     {isPrinting ? <span className="animate-pulse">Sedang Memproses PDF...</span> : <><Icons.Printer size={18} /> Download / Cetak PDF</>}
                                 </button>
@@ -813,7 +852,18 @@
                                 </div>
                             )}
 
-                            <div className="flex justify-between mb-8 bg-gray-50 p-4 rounded-lg print:bg-transparent print:p-0 print:mb-6"><div><p className="text-xs text-gray-500 uppercase font-bold">Nama Mahasiswa / Siswa</p><p className="text-lg font-bold text-gray-900">{user.name}</p></div><div className="text-right"><p className="text-xs text-gray-500 uppercase font-bold">Tanggal Tes</p><p className="text-lg font-bold text-gray-900">{user.date}</p></div></div>
+                            <div className="flex justify-between mb-8 bg-gray-50 p-4 rounded-lg print:bg-transparent print:p-0 print:mb-6">
+                                <div>
+                                    <p className="text-xs text-gray-500 uppercase font-bold">Nama Lengkap Siswa</p>
+                                    <p className="text-lg font-bold text-gray-900">{user.name}</p>
+                                    <p className="text-xs text-gray-500 uppercase font-bold mt-2">NIS</p>
+                                    <p className="text-base font-bold text-gray-900">{user.nis || "-"}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs text-gray-500 uppercase font-bold">Tanggal Tes</p>
+                                    <p className="text-lg font-bold text-gray-900">{user.date}</p>
+                                </div>
+                            </div>
 
                             <div className="mb-8 p-6 bg-red-50 rounded-xl border border-red-100 print:bg-gray-50 print:border-gray-200"><h3 className="text-sm font-bold text-red-800 uppercase mb-3 flex items-center gap-2"><Icons.Info size={16} /> Analisis Personal</h3><p className="text-gray-800 leading-relaxed whitespace-pre-line text-sm md:text-base">{analysisText}</p></div>
 
@@ -821,7 +871,18 @@
                                 <h3 className="text-sm font-bold text-yellow-800 uppercase mb-4 flex items-center gap-2"><Icons.TrendingUp size={18} /> Pemetaan Karir & Akademik (Hybrid PM+SAW)</h3>
 
                                 <div className="space-y-6">
-                                    {professionMatches.slice(0, 3).map((prof, i) => (
+                                    {(() => {
+    const uniqueDomains = new Set();
+    const topProfessions = [];
+    for (const prof of professionMatches) {
+        if (!uniqueDomains.has(prof.domain)) {
+            uniqueDomains.add(prof.domain);
+            topProfessions.push(prof);
+        }
+        if (topProfessions.length === 3) break;
+    }
+    return topProfessions;
+})().map((prof, i) => (
                                         <div key={i} className="bg-white p-5 rounded-xl shadow-md border border-yellow-200 flex flex-col gap-4 relative overflow-hidden">
                                             {i === 0 && <div className="absolute top-0 right-0 bg-red-800 text-white text-[10px] px-3 py-1 font-bold rounded-bl-lg">TOP REKOMENDASI</div>}
 
@@ -841,53 +902,67 @@
                                                     <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-2">Layer 2: Rekomendasi Jalur Akademik</p>
                                                     <div className="flex flex-col gap-3 text-sm">
                                                         <div>
-                                                            <p className="font-bold text-blue-900 flex items-center gap-1"><Icons.BookOpen size={14} /> SMA / SMK</p>
-                                                            <p className="text-gray-600">{prof.akademik.sma}</p>
-                                                        </div>
+    <p className="font-bold text-blue-900 flex items-center gap-1"><Icons.BookOpen size={14} /> SMA / SMK</p>
+    <p className="text-gray-600 font-medium">{prof.akademik.sma}</p>
+    <p className="text-[11px] text-blue-700 italic mt-1 bg-blue-50 p-2 rounded border border-blue-100 leading-tight">
+        Jalur prasyarat ini disarankan karena materi dasarnya sejalan dengan minat dan karakter bawaanmu.
+    </p>
+</div>
                                                         <div>
-                                                            <p className="font-bold text-blue-900 flex items-center gap-1 mb-2"><Icons.Target size={14} /> Rekomendasi Program Studi Kuliah</p>
-                                                            <div className="flex flex-col gap-2">
-                                                                {(() => {
-                                                                    const utiKeywords = ["informatika", "sistem informasi", "teknik elektro", "teknik komputer", "sipil", "teknologi informasi", "manajemen", "akuntansi", "sastra inggris", "pendidikan bahasa inggris", "pendidikan matematika", "pendidikan olahraga"];
-                                                                    const prodis = prof.akademik.kuliah.split('/').map(p => p.trim());
-                                                                    const uti = prodis.filter(p => utiKeywords.some(kw => p.toLowerCase().includes(kw)));
-                                                                    const nonUti = prodis.filter(p => !uti.includes(p));
+                                                            <p className="font-bold text-blue-900 flex items-center gap-1 mb-2"><Icons.Target size={14} /> Rekomendasi Jurusan & Kuliah</p>
+                                                              <div className="flex flex-col gap-2">
+                                                                  {(() => {
+                                                                      const textToMatch = (prof.akademik.sma + " " + prof.akademik.kuliah + " " + prof.domain + " " + prof.name).toLowerCase();
+let smkMajors = [];
+if (textToMatch.match(/komputer|informatika|rpl|tkj|software|data|cyber|network|it |sistem informasi/)) smkMajors.push("Teknik Komputer dan Jaringan");
+if (textToMatch.match(/mesin|pemesinan|mekatronika|robotik|industri|manufaktur|elektro|sipil|arsitektur/)) smkMajors.push("Teknik Pemesinan");
+if (textToMatch.match(/otomotif|kendaraan|transportasi|logistik/)) smkMajors.push("Teknik Kendaraan Ringan", "Teknik Sepeda Motor");
 
-                                                                    return (
-                                                                        <>
-                                                                            {uti.length > 0 && (
-                                                                                <div className="bg-white p-3 rounded-lg border border-yellow-200 shadow-sm">
-                                                                                    <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-bold border border-blue-200 inline-block mb-2">Tersedia di SMK Budi Karya Natar</span>
-                                                                                    <div className="flex flex-wrap gap-2">
-                                                                                        {uti.map((p, idx) => <span key={idx} className="bg-yellow-100 text-yellow-800 border border-yellow-300 text-xs px-3 py-1.5 rounded-md shadow-sm font-extrabold flex items-center gap-1">{p} <Icons.Check size={12} className="text-yellow-600" /></span>)}
-                                                                                    </div>
-                                                                                </div>
-                                                                            )}
-                                                                            {nonUti.length > 0 && (
-                                                                                <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-                                                                                    <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-bold border border-gray-200 inline-block mb-2">Program Studi Umum Lainnya</span>
-                                                                                    <div className="flex flex-wrap gap-2">
-                                                                                        {nonUti.map((p, idx) => <span key={idx} className="bg-gray-50 border border-gray-200 text-gray-600 text-xs px-3 py-1.5 rounded-md">{p}</span>)}
-                                                                                    </div>
-                                                                                </div>
-                                                                            )}
-                                                                        </>
-                                                                    );
-                                                                })()}
-                                                            </div>
-                                                        </div>
-                                                        <div className="mt-1 pt-2 border-t border-blue-100 border-dashed">
-                                                            <p className="text-xs text-gray-500">Ekosistem UTI yang disarankan: <span className="font-medium text-blue-800">{prof.akademik.ukm_coe}</span></p>
-                                                        </div>
+let smkExplanation = "";
+if (smkMajors.length > 0) {
+    smkExplanation = `Jurusan ${smkMajors.join(" dan ")} direkomendasikan karena kurikulum praktiknya sangat relevan dengan keahlian yang dibutuhkan untuk sukses di bidang ${prof.domain}.`;
+} else {
+    smkMajors = ["Teknik Komputer dan Jaringan"];
+    smkExplanation = `Meskipun bidang ${prof.domain} mungkin tidak berkaitan langsung dengan keteknikan murni, keterampilan digital dan pemecahan masalah dari jurusan Teknik Komputer dan Jaringan akan selalu menjadi nilai tambah yang besar.`;
+}
+
+const prodis = prof.akademik.kuliah.split('/').map(p => p.trim());
+
+return (
+    <>
+        <div className="bg-white p-3 rounded-lg border border-yellow-200 shadow-sm">
+            <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-bold border border-blue-200 inline-block mb-2">Tersedia di SMK Budi Karya Natar</span>
+            <div className="flex flex-wrap gap-2">
+{smkMajors.map((p, idx) => <span key={idx} className="bg-yellow-100 text-yellow-800 border border-yellow-300 text-xs px-3 py-1.5 rounded-md shadow-sm font-extrabold flex items-center gap-1">{p} <Icons.Check size={12} className="text-yellow-600" /></span>)}
+            </div>
+            <p className="text-[11px] text-yellow-800 mt-2 italic bg-yellow-50 p-1.5 rounded border border-yellow-100 leading-tight">{smkExplanation}</p>
+        </div>
+                                                                              <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                                                                  <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-bold border border-gray-200 inline-block mb-2">Rekomendasi Program Studi Kuliah Lanjutan</span>
+                                                                                  <div className="flex flex-wrap gap-2">
+                                                                                      {prodis.map((p, idx) => <span key={idx} className="bg-gray-50 border border-gray-200 text-gray-600 text-xs px-3 py-1.5 rounded-md">{p}</span>)}
+                                                                                  </div>
+                                                                              </div>
+                                                                          </>
+                                                                      );
+                                                                  })()}
+                                                              </div>
+                                                          </div>
+                                                          <div className="mt-1 pt-2 border-t border-blue-100 border-dashed">
+                                                              <p className="text-xs text-gray-500">Kegiatan Ekstrakurikuler yang disarankan: <span className="font-medium text-blue-800">{prof.akademik.ukm_coe.replace(/UKM /g, "Ekskul ").replace(/CoE /g, "Klub ").replace(/KSR-PMI/g, "PMR")}</span></p>
+                                                          </div>
                                                     </div>
                                                 </div>
                                             )}
 
                                             {/* LAYER 3: PROFESI */}
                                             <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Layer 3: Target Profesi Utama</p>
-                                                <h5 className="font-bold text-gray-800 text-lg flex items-center gap-2"><Icons.Briefcase size={16} className="text-red-700" /> {prof.name}</h5>
-                                            </div>
+    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Layer 3: Target Profesi Utama</p>
+    <h5 className="font-bold text-gray-800 text-lg flex items-center gap-2 mb-1"><Icons.Briefcase size={16} className="text-red-700" /> {prof.name}</h5>
+    <p className="text-[11px] text-gray-600 leading-tight">
+        Sistem merekomendasikan <b>{prof.name}</b> karena lingkungan kerjanya akan memfasilitasi karakter dominanmu untuk berkembang. Kecocokan sebesar <b>{prof.match.toFixed(1)}%</b> membuktikan bahwa profesi ini selaras dengan psikologismu.
+    </p>
+</div>
 
                                         </div>
                                     ))}
@@ -896,7 +971,7 @@
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
                                 <div className={`p-6 rounded-xl border-l-8 border-blue-800 bg-gray-50 print:bg-white print:border text-left`}><h3 className="text-xs font-bold text-gray-500 uppercase mb-1">Tipe Dominan (RIASEC)</h3><h2 className="text-3xl font-extrabold text-blue-900 mb-2">{data.label}</h2><p className="text-sm text-gray-700">"{data.desc}"</p></div>
-                                <div><h3 className="font-bold text-gray-800 mb-3 text-sm uppercase">Peta Kekuatan Minat</h3><div className="space-y-2">{riasecScores.map((s) => (<div key={s.k} className="flex items-center gap-3 text-xs"><span className="w-6 font-bold text-gray-600">{s.k}</span><div className="flex-1 bg-gray-200 h-3 rounded-full overflow-hidden print:border print:bg-white"><div className={`h-full bg-red-800 print:bg-gray-800`} style={{ width: `${s.v * 100}%`, minWidth: '5px' }}></div></div></div>))}</div></div>
+                                <div><h3 className="font-bold text-gray-800 mb-3 text-sm uppercase">Peta Kekuatan Minat</h3><div className="space-y-2">{riasecScores.map((s) => (<div key={s.k} className="flex items-center gap-3 text-xs"><span className="w-4 font-bold text-gray-600">{s.k}</span><div className="flex-1 bg-gray-200 h-3 rounded-full overflow-hidden print:border print:bg-white"><div className={`h-full bg-red-800 print:bg-gray-800`} style={{ width: `${s.v * 100}%`, minWidth: '5px' }}></div></div><span className="w-10 font-bold text-gray-700 text-right">{(s.v * 100).toFixed(0)}%</span></div>))}</div></div>
                             </div>
                             <div className="mb-8 mt-8 pt-8 border-t border-gray-200"><h3 className="font-bold text-gray-800 mb-4 text-center">Kamus Kode Minat (Edukasi)</h3><div className="grid grid-cols-2 md:grid-cols-3 gap-3">{Object.entries(CATEGORIES).map(([key, cat]) => (<div key={key} className="text-xs border p-2 rounded bg-gray-50 print:bg-white"><span className="font-bold text-blue-900">{key} - {cat.label.split('(')[0]}</span><p className="text-gray-600 mt-1 leading-tight">{cat.desc}</p></div>))}</div></div>
                             <div className="mt-10 text-center text-xs text-gray-400 print:text-gray-500"><p>Dikembangkan oleh Rakhmat Dedi G & Team</p><p className="mt-1">Sebagai alat bantu keputusan, bukan penentu mutlak masa depan.</p></div>
@@ -1224,36 +1299,38 @@
             const [variant, setVariant] = useState('menu');
             const [showGlobalReview, setShowGlobalReview] = useState(false);
 
-            if (variant === 'trial') return <div className="min-h-screen bg-gradient-to-br from-sky-400 to-blue-600 bg-cover bg-center bg-fixed" ><div className="min-h-screen bg-blue-900/10 pb-10"><VariantAssessment mode="trial" onBack={() => setVariant('menu')} /></div></div>;
-            if (variant === 'cepat') return <div className="min-h-screen bg-gradient-to-br from-sky-400 to-blue-600 bg-cover bg-center bg-fixed" ><div className="min-h-screen bg-blue-900/10 pb-10"><VariantAssessment mode="cepat" onBack={() => setVariant('menu')} /></div></div>;
-            if (variant === 'lengkap') return <div className="min-h-screen bg-gradient-to-br from-sky-400 to-blue-600 bg-cover bg-center bg-fixed" ><div className="min-h-screen bg-blue-900/10 pb-10"><VariantAssessment mode="lengkap" onBack={() => setVariant('menu')} /></div></div>;
-            if (variant === 'explorer') return <div className="min-h-screen bg-gradient-to-br from-sky-400 to-blue-600 bg-cover bg-center bg-fixed" ><div className="min-h-screen bg-blue-900/10 pb-10"><VariantExplorer onBack={() => setVariant('menu')} /></div></div>;
+            if (variant === 'trial') return <div className="min-h-screen bg-gradient-to-br from-[#eaf6ff] to-[#d6efff] font-sans"><div className="min-h-screen pb-10"><VariantAssessment mode="trial" onBack={() => setVariant('menu')} /></div></div>;
+            if (variant === 'cepat') return <div className="min-h-screen bg-gradient-to-br from-[#eaf6ff] to-[#d6efff] font-sans"><div className="min-h-screen pb-10"><VariantAssessment mode="cepat" onBack={() => setVariant('menu')} /></div></div>;
+            if (variant === 'lengkap') return <div className="min-h-screen bg-gradient-to-br from-[#eaf6ff] to-[#d6efff] font-sans"><div className="min-h-screen pb-10"><VariantAssessment mode="lengkap" onBack={() => setVariant('menu')} /></div></div>;
+            if (variant === 'explorer') return <div className="min-h-screen bg-gradient-to-br from-[#eaf6ff] to-[#d6efff] font-sans"><div className="min-h-screen pb-10"><VariantExplorer onBack={() => setVariant('menu')} /></div></div>;
 
             return (
-                <div className="min-h-screen bg-cover bg-center bg-fixed font-sans" >
-                    <div className="min-h-screen bg-blue-900/10 p-6 flex flex-col">
+                <div className="min-h-screen bg-gradient-to-br from-[#eaf6ff] to-[#d6efff] font-sans">
+                      <div className="min-h-screen p-6 flex flex-col">
 
                         <FeedbackModal isOpen={showGlobalReview} onClose={() => setShowGlobalReview(false)} />
 
                         {/* Header UTI */}
-                        <header className="flex items-center justify-between bg-white/10 backdrop-blur-md p-4 rounded-2xl mb-10 max-w-6xl mx-auto w-full border border-white/20 shadow-lg">
+                        <header className="flex items-center justify-between bg-white p-4 rounded-2xl mb-10 max-w-6xl mx-auto w-full shadow-md">
                             <div className="flex items-center gap-4">
-                                <img src="logo_smk.jpg" alt="Logo UTI" className="h-16 bg-white p-1 rounded-lg" />
-                                <div className="text-white">
-                                    <h1 className="text-2xl font-bold text-yellow-400 drop-shadow-md">SMK Budi Karya Natar</h1>
-                                    <p className="text-sm opacity-90">EduTalent Asesmen - Sistem Asesmen Mandiri Minat dan Karakter</p>
+                                <img src="header_logos.png" alt="EduTalent Logos" className="h-14 md:h-16 object-contain" />
+                                <div>
+                                    <h1 className="text-2xl font-extrabold text-yellow-500 drop-shadow-sm">SMK Budi Karya Natar</h1>
+                                    <p className="text-sm text-gray-500 font-medium">EduTalent Asesmen - Sistem Asesmen Mandiri Minat dan Karakter</p>
                                 </div>
                             </div>
-                            <button
-                                onClick={() => setShowGlobalReview(true)}
-                                className="bg-white/20 hover:bg-yellow-500 text-white p-3 rounded-xl transition-all border border-white/30 group">
-                                <Icons.MessageSquare className="group-hover:scale-110 transition-transform" />
-                            </button>
+                            <div className="flex items-center gap-4">
+                                    <button
+                                      onClick={() => setShowGlobalReview(true)}
+                                      className="bg-white hover:bg-blue-50 text-blue-500 p-3 rounded-xl transition-all border border-blue-100 shadow-sm group">
+                                      <Icons.MessageSquare className="group-hover:scale-110 transition-transform" />
+                                  </button>
+                              </div>
                         </header>
 
                         <div className="max-w-6xl mx-auto mb-10 text-center">
-                            <h2 className="text-4xl font-extrabold text-white mb-4 drop-shadow-lg">Pilih Mode Asesmen</h2>
-                            <p className="text-gray-300 text-lg">Kenali potensi diri Anda melalui instrumen yang teruji secara ilmiah.</p>
+                            <h2 className="text-4xl font-extrabold text-blue-900 mb-4">Pilih Mode Asesmen</h2>
+                            <p className="text-gray-500 text-lg font-medium">Kenali potensi diri Anda melalui instrumen yang teruji secara ilmiah.</p>
                         </div>
 
                         <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1302,5 +1379,16 @@
 </body>
 
 </html>
+
+
+
+
+
+
+
+
+
+
+
 
 
